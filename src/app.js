@@ -3,6 +3,7 @@
  */
 
 import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js";
+import { formatMessage } from "./i18n.js";
 import { KeyboardController } from "./keyboard-lock.js";
 import { SoundBeeper } from "./sound.js";
 import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js";
@@ -63,19 +64,19 @@ const SAMPLE_CORNE_KEYMAP = `
 
 const PRESET_CONFIGS = [
   {
-    label: "Corne (ZMK 官方)",
+    labelKey: "presetCorne",
     url: "https://github.com/zmkfirmware/zmk/blob/main/app/boards/shields/corne/corne.keymap",
   },
   {
-    label: "Sofle (ZMK 官方)",
+    labelKey: "presetSofle",
     url: "https://github.com/zmkfirmware/zmk/blob/main/app/boards/shields/sofle/sofle.keymap",
   },
   {
-    label: "Lily58 (ZMK 官方)",
+    labelKey: "presetLily58",
     url: "https://github.com/zmkfirmware/zmk/blob/main/app/boards/shields/lily58/lily58.keymap",
   },
   {
-    label: "Sweep / Cradio",
+    labelKey: "presetCradio",
     url: "https://github.com/zmkfirmware/zmk/blob/main/app/boards/shields/cradio/cradio.keymap",
   },
 ];
@@ -83,6 +84,9 @@ const PRESET_CONFIGS = [
 // MARK: - Application State
 
 const appState = {
+  lang: "zh",
+  theme: "dark",
+  isLoading: false,
   config: null,
   activeLayerIndex: 0,
   autoSwitchLayer: true,
@@ -95,6 +99,8 @@ const appState = {
   testedPhysicalKeys: new Set(),
   testedLayerKeys: new Set(),
   eventLog: [],
+  lastKeyEvent: null,
+  lastBanner: null,
   unitPx: 54,
   selectedKeyIdx: null,
   lockStatus: {
@@ -106,6 +112,10 @@ const appState = {
   },
   hidDevices: [],
 };
+
+function t(key, params = {}) {
+  return formatMessage(appState.lang, key, params);
+}
 
 // MARK: - DOM Elements
 
@@ -130,19 +140,20 @@ const els = {
   interceptToggle: document.getElementById("interceptToggle"),
   fullscreenLockBtn: document.getElementById("fullscreenLockBtn"),
   lockBadge: document.getElementById("lockBadge"),
+  themeToggleBtn: document.getElementById("themeToggleBtn"),
+  langToggleBtn: document.getElementById("langToggleBtn"),
   connectHidBtn: document.getElementById("connectHidBtn"),
   devicesList: document.getElementById("devicesList"),
   metaRepo: document.getElementById("metaRepo"),
   metaLayout: document.getElementById("metaLayout"),
   metaCoverage: document.getElementById("metaCoverage"),
   resetTestedBtn: document.getElementById("resetTestedBtn"),
-  layerTabs: document.getElementById("layerTabs"),
   soundToggle: document.getElementById("soundToggle"),
-  autoLayerToggle: document.getElementById("autoLayerToggle"),
   showIndicesToggle: document.getElementById("showIndicesToggle"),
   keyboardStage: document.getElementById("keyboardStage"),
   keyboardCanvas: document.getElementById("keyboardCanvas"),
   activeModsBar: document.getElementById("activeModsBar"),
+  lockHint: document.getElementById("lockHint"),
   inspectorCard: document.getElementById("inspectorCard"),
   eventLogList: document.getElementById("eventLogList"),
   clearLogBtn: document.getElementById("clearLogBtn"),
@@ -234,20 +245,13 @@ function handleKeyEvent(ev) {
   const codeKey = ev.code || ev.zmk;
 
   if (ev.action === "down") {
-    let matches = findMatchesInLayer(ev, appState.activeLayerIndex);
-
-    // Auto-switch layer if not found on current layer
-    if (matches.length === 0 && appState.autoSwitchLayer) {
-      for (let l = 0; l < appState.config.layers.length; l++) {
-        if (l === appState.activeLayerIndex) continue;
-        const found = findMatchesInLayer(ev, l);
-        if (found.length > 0) {
-          appState.activeLayerIndex = l;
-          matches = found;
-          renderLayerTabs();
-          renderKeyboard();
-          break;
-        }
+    let matches = [];
+    const totalLayers = appState.config.layers.length;
+    for (let l = 0; l < totalLayers; l++) {
+      const found = findMatchesInLayer(ev, l);
+      if (found.length > 0) {
+        matches = found;
+        break;
       }
     }
 
@@ -257,7 +261,7 @@ function handleKeyEvent(ev) {
     appState.heldCodeMatches.set(codeKey, matches);
 
     for (const m of matches) {
-      appState.activeKeyVisuals.set(`${m.layerIdx}:${m.keyIdx}`, m.kind);
+      appState.activeKeyVisuals.set(m.keyIdx, m.kind);
       appState.testedPhysicalKeys.add(m.keyIdx);
       appState.testedLayerKeys.add(`${m.layerIdx}:${m.keyIdx}`);
     }
@@ -274,27 +278,34 @@ function handleKeyEvent(ev) {
       }
       pushEventLog(ev, matches);
     }
+    appState.lastKeyEvent = { ...ev, matched: matches.length > 0 };
     updateKeyVisualStates();
     updateCoverageMeta();
     renderActiveModifiers(ev.modifiers || []);
     if (matches.length > 0) {
-      renderInspector(matches[0].keyIdx, ev);
+      appState.selectedKeyIdx = matches[0].keyIdx;
+      renderInspector(matches[0].keyIdx, appState.lastKeyEvent);
     } else {
-      renderInspector(appState.selectedKeyIdx, ev);
+      renderInspector(appState.selectedKeyIdx, appState.lastKeyEvent);
     }
   } else if (ev.action === "up") {
     const prevMatches = appState.heldCodeMatches.get(codeKey) || [];
     appState.heldCodeMatches.delete(codeKey);
     for (const m of prevMatches) {
-      appState.activeKeyVisuals.delete(`${m.layerIdx}:${m.keyIdx}`);
+      appState.activeKeyVisuals.delete(m.keyIdx);
     }
-    // Also sweep any key matching ev.zmk in case auto-layer shifted
-    for (const key of Array.from(appState.activeKeyVisuals.keys())) {
-      const [lStr, kStr] = key.split(":");
-      const b = resolveEffectiveBinding(Number(lStr), Number(kStr));
-      if (b && (b.tap === ev.zmk || b.hold === ev.zmk)) {
-        appState.activeKeyVisuals.delete(key);
+    // Sweep any active physical key whose binding across layers matches ev.zmk
+    for (const keyIdx of Array.from(appState.activeKeyVisuals.keys())) {
+      const layers = appState.config.layers || [];
+      let matched = false;
+      for (let l = 0; l < layers.length; l++) {
+        const b = resolveEffectiveBinding(l, keyIdx);
+        if (b && (b.tap === ev.zmk || b.hold === ev.zmk)) {
+          matched = true;
+          break;
+        }
       }
+      if (matched) appState.activeKeyVisuals.delete(keyIdx);
     }
     updateKeyVisualStates();
     renderActiveModifiers(ev.modifiers || []);
@@ -322,28 +333,16 @@ function renderKeyboard() {
   const u = appState.unitPx;
   const gap = Math.max(4, Math.round(u * 0.08));
   const { keys, widthU, heightU } = cfg.layout;
-  const layer = cfg.layers[appState.activeLayerIndex] || cfg.layers[0];
 
   els.keyboardCanvas.innerHTML = "";
   els.keyboardCanvas.style.width = `${Math.round(widthU * u)}px`;
   els.keyboardCanvas.style.height = `${Math.round(heightU * u)}px`;
 
   keys.forEach((k, idx) => {
-    const binding = layer?.bindings?.[idx] || {
-      raw: "&none",
-      behavior: "none",
-      displayTap: "",
-      displayHold: null,
-    };
-    const effective = resolveEffectiveBinding(appState.activeLayerIndex, idx);
-
     const keyEl = document.createElement("button");
     keyEl.type = "button";
     keyEl.className = "keycap";
     keyEl.dataset.keyIdx = String(idx);
-
-    if (binding.behavior === "trans") keyEl.classList.add("is-trans");
-    if (binding.behavior === "none") keyEl.classList.add("is-none");
     if (appState.selectedKeyIdx === idx) keyEl.classList.add("is-selected");
 
     const wPx = Math.max(20, Math.round(k.w * u - gap));
@@ -363,46 +362,22 @@ function renderKeyboard() {
       keyEl.style.transform = `rotate(${k.r}deg)`;
     }
 
-    // Index badge
+    // Optional physical key index badge
     const idxEl = document.createElement("span");
     idxEl.className = "keycap-idx";
     idxEl.textContent = String(idx);
     if (!appState.showKeyIndices) idxEl.classList.add("hidden");
     keyEl.appendChild(idxEl);
 
-    // Main tap legend
-    const tapEl = document.createElement("span");
-    tapEl.className = "keycap-tap";
-    if (binding.behavior === "trans" && effective && effective.inheritedFromBase) {
-      tapEl.textContent = effective.displayTap || "▽";
-      tapEl.title = `透传自 Base 层: ${effective.raw}`;
-    } else {
-      tapEl.textContent = binding.displayTap ?? "";
-    }
-    if ((tapEl.textContent || "").length > 4) tapEl.classList.add("is-small");
-    keyEl.appendChild(tapEl);
-
-    // Hold legend
-    const holdLabel =
-      binding.behavior === "trans" && effective?.inheritedFromBase
-        ? effective.displayHold
-        : binding.displayHold;
-    if (holdLabel) {
-      const holdEl = document.createElement("span");
-      holdEl.className = "keycap-hold";
-      holdEl.textContent = holdLabel;
-      keyEl.appendChild(holdEl);
-    }
-
     // Tested check dot
     const dotEl = document.createElement("span");
     dotEl.className = "keycap-tested-dot";
     keyEl.appendChild(dotEl);
 
-    keyEl.title = `#${idx}: ${binding.raw}`;
+    keyEl.title = `#${idx}`;
     keyEl.addEventListener("click", () => {
       appState.selectedKeyIdx = idx;
-      renderInspector(idx, null);
+      renderInspector(idx, appState.lastKeyEvent);
       updateKeyVisualStates();
       // Keep focus off button so Space/Enter stay intercepted
       keyEl.blur();
@@ -415,11 +390,10 @@ function renderKeyboard() {
 }
 
 function updateKeyVisualStates() {
-  const layerIdx = appState.activeLayerIndex;
   const keyEls = els.keyboardCanvas.querySelectorAll(".keycap");
   for (const el of keyEls) {
     const idx = Number(el.dataset.keyIdx);
-    const visualKind = appState.activeKeyVisuals.get(`${layerIdx}:${idx}`);
+    const visualKind = appState.activeKeyVisuals.get(idx);
     el.classList.toggle("is-active", visualKind === "primary");
     el.classList.toggle("is-hold-active", visualKind === "hold");
     el.classList.toggle(
@@ -430,36 +404,20 @@ function updateKeyVisualStates() {
   }
 }
 
-function renderLayerTabs() {
-  const cfg = appState.config;
-  if (!cfg) return;
-  els.layerTabs.innerHTML = "";
-  cfg.layers.forEach((lyr, idx) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `layer-tab${idx === appState.activeLayerIndex ? " is-active" : ""}`;
-    btn.innerHTML = `<span class="layer-num">${idx}</span><span>${escapeHtml(lyr.name)}</span>`;
-    btn.addEventListener("click", () => {
-      appState.activeLayerIndex = idx;
-      renderLayerTabs();
-      renderKeyboard();
-      btn.blur();
-    });
-    els.layerTabs.appendChild(btn);
-  });
-}
-
 function updateCoverageMeta() {
-  if (!appState.config) return;
+  if (!appState.config) {
+    els.metaCoverage.textContent = t("metaCoverage", { tested: 0, total: 0, pct: 0 });
+    return;
+  }
   const total = appState.config.keyCount;
   const tested = appState.testedPhysicalKeys.size;
   const pct = total > 0 ? Math.round((tested / total) * 100) : 0;
-  els.metaCoverage.textContent = `已测试 ${tested} / ${total} (${pct}%)`;
+  els.metaCoverage.textContent = t("metaCoverage", { tested, total, pct });
 }
 
 function renderActiveModifiers(mods) {
   if (!mods || mods.length === 0) {
-    els.activeModsBar.innerHTML = `<span class="muted">当前无按住修饰键</span>`;
+    els.activeModsBar.innerHTML = `<span class="muted">${escapeHtml(t("modsEmpty"))}</span>`;
     return;
   }
   els.activeModsBar.innerHTML = mods
@@ -468,49 +426,61 @@ function renderActiveModifiers(mods) {
 }
 
 function renderInspector(keyIdx, lastEvent) {
-  const cfg = appState.config;
-  const keyInfo =
-    cfg && keyIdx !== null && keyIdx !== undefined
-      ? cfg.layers[appState.activeLayerIndex]?.bindings?.[keyIdx]
-      : null;
+  const interceptedBadge = lastEvent
+    ? `<span class="tag ${lastEvent.intercepted ? "tag-ok" : "tag-warn"}">${escapeHtml(
+        lastEvent.intercepted ? t("inspInterceptedYes") : t("inspInterceptedNo")
+      )}</span>`
+    : `<span class="muted">—</span>`;
 
-  const lines = [];
-  if (lastEvent) {
-    lines.push(`<div class="insp-row"><span>最后按键</span><strong>${escapeHtml(lastEvent.zmk)}</strong></div>`);
-    lines.push(
-      `<div class="insp-row"><span>Browser Code</span><code>${escapeHtml(lastEvent.code || "-")}</code></div>`
-    );
-    lines.push(
-      `<div class="insp-row"><span>系统按键拦截</span><span class="tag ${
-        lastEvent.intercepted ? "tag-ok" : "tag-warn"
-      }">${lastEvent.intercepted ? "已拦截" : "未拦截"}</span></div>`
-    );
+  const matchBadge = lastEvent
+    ? `<span class="tag ${lastEvent.matched ? "tag-ok" : "tag-warn"}">${escapeHtml(
+        lastEvent.matched ? t("inspMatchedYes") : t("inspMatchedNo")
+      )}</span>`
+    : `<span class="muted">—</span>`;
+
+  const rows = [
+    `<div class="insp-row"><span>${escapeHtml(t("inspLastKey"))}</span><strong>${escapeHtml(
+      lastEvent?.zmk || "—"
+    )}</strong></div>`,
+    `<div class="insp-row"><span>${escapeHtml(t("inspBrowserCode"))}</span><code>${escapeHtml(
+      lastEvent?.code || "—"
+    )}</code></div>`,
+    `<div class="insp-row"><span>${escapeHtml(t("inspInterception"))}</span>${interceptedBadge}</div>`,
+    `<hr class="insp-sep"/>`,
+    `<div class="insp-row"><span>${escapeHtml(t("inspPosition"))}</span><strong>${
+      keyIdx !== null && keyIdx !== undefined ? `#${keyIdx}` : "—"
+    }</strong></div>`,
+    `<div class="insp-row"><span>${escapeHtml(t("inspMatched"))}</span>${matchBadge}</div>`,
+  ];
+
+  els.inspectorCard.innerHTML = rows.join("");
+}
+
+function renderEventLog() {
+  if (appState.eventLog.length === 0) {
+    els.eventLogList.innerHTML = `<div class="muted">${escapeHtml(t("eventLogEmpty"))}</div>`;
+    return;
   }
-  if (keyInfo) {
-    lines.push(`<hr class="insp-sep"/>`);
-    lines.push(
-      `<div class="insp-row"><span>位置编号</span><strong>#${keyIdx} (Layer ${appState.activeLayerIndex})</strong></div>`
-    );
-    lines.push(`<div class="insp-row"><span>ZMK 绑定</span><code>${escapeHtml(keyInfo.raw)}</code></div>`);
-    if (keyInfo.hold) {
-      lines.push(`<div class="insp-row"><span>Hold 动作</span><strong>${escapeHtml(keyInfo.hold)}</strong></div>`);
-    }
-  }
-  if (lines.length === 0) {
-    els.inspectorCard.innerHTML = `<div class="muted">按下键盘按键，或点击布局上的按键查看详细 ZMK 绑定。</div>`;
-  } else {
-    els.inspectorCard.innerHTML = lines.join("");
-  }
+  els.eventLogList.innerHTML = appState.eventLog
+    .map(
+      (item) => `
+      <div class="log-item ${item.matched ? "is-matched" : ""}">
+        <span class="log-time">${item.ts}</span>
+        <span class="log-key">${escapeHtml(item.zmk)}</span>
+        <span class="log-match">${escapeHtml(item.matchStr || t("unmatchedKey"))}</span>
+      </div>`
+    )
+    .join("");
 }
 
 function pushEventLog(ev, matches) {
   const matchStr =
     matches.length > 0
-      ? matches.map((m) => `L${m.layerIdx}#${m.keyIdx}`).join(", ")
-      : "未在当前层匹配";
+      ? matches.map((m) => `#${m.keyIdx}`).join(", ")
+      : "";
 
   appState.eventLog.unshift({
-    ts: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+    ts: new Date().toLocaleTimeString(appState.lang === "zh" ? "zh-CN" : "en-US", { hour12: false }),
     zmk: ev.zmk,
     code: ev.code,
     matchStr,
@@ -518,17 +488,7 @@ function pushEventLog(ev, matches) {
     intercepted: ev.intercepted,
   });
   if (appState.eventLog.length > 40) appState.eventLog.length = 40;
-
-  els.eventLogList.innerHTML = appState.eventLog
-    .map(
-      (item) => `
-      <div class="log-item ${item.matched ? "is-matched" : ""}">
-        <span class="log-time">${item.ts}</span>
-        <span class="log-key">${escapeHtml(item.zmk)}</span>
-        <span class="log-match">${escapeHtml(item.matchStr)}</span>
-      </div>`
-    )
-    .join("");
+  renderEventLog();
 }
 
 function renderLockStatus(status) {
@@ -537,29 +497,29 @@ function renderLockStatus(status) {
 
   if (!status.interceptEnabled) {
     els.lockBadge.className = "lock-badge is-off";
-    els.lockBadge.textContent = "拦截已关闭";
+    els.lockBadge.textContent = t("lockBadgeOff");
   } else if (status.isTypingInInput) {
     els.lockBadge.className = "lock-badge is-paused";
-    els.lockBadge.textContent = "输入链接时自动暂停拦截";
+    els.lockBadge.textContent = t("lockBadgePaused");
   } else if (status.isFullscreenLocked) {
     els.lockBadge.className = "lock-badge is-locked";
-    els.lockBadge.textContent = "全屏系统键锁定中 (Keyboard Lock)";
+    els.lockBadge.textContent = t("lockBadgeLocked");
   } else {
     els.lockBadge.className = "lock-badge is-active";
-    els.lockBadge.textContent = "浏览器按键拦截已启用";
+    els.lockBadge.textContent = t("lockBadgeActive");
   }
 
   els.fullscreenLockBtn.textContent = status.isFullscreenLocked
-    ? "退出全屏锁定 (长按 Esc)"
+    ? t("btnFullscreenExit")
     : status.keyboardLockSupported
-      ? "全屏锁定系统键"
-      : "全屏测试模式";
+      ? t("btnFullscreenEnter")
+      : t("btnFullscreenMode");
 }
 
 function renderDevices(devices) {
   appState.hidDevices = devices;
   if (!devices || devices.length === 0) {
-    els.devicesList.innerHTML = `<span class="device-pill is-muted">可直接通过 USB / 蓝牙输入测试 (可选 WebHID 识别设备)</span>`;
+    els.devicesList.innerHTML = `<span class="device-pill is-muted">${escapeHtml(t("devicesEmptyHint"))}</span>`;
     return;
   }
   els.devicesList.innerHTML = devices
@@ -572,13 +532,107 @@ function renderDevices(devices) {
     .join("");
 }
 
-function setBanner(msg, type = "info") {
-  if (!msg) {
+function setBanner(msgOrKey, type = "info", params = null) {
+  if (!msgOrKey) {
+    appState.lastBanner = null;
     els.statusBanner.classList.add("hidden");
     return;
   }
+  appState.lastBanner = { msgOrKey, type, params };
   els.statusBanner.className = `status-banner is-${type}`;
-  els.statusBanner.textContent = msg;
+  els.statusBanner.textContent = params !== null ? t(msgOrKey, params) : msgOrKey;
+}
+
+function renderPresets() {
+  els.presetBar.innerHTML = "";
+  PRESET_CONFIGS.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "preset-chip";
+    btn.textContent = t(p.labelKey);
+    btn.addEventListener("click", () => {
+      els.repoUrlInput.value = p.url;
+      loadFromUrlInput();
+      btn.blur();
+    });
+    els.presetBar.appendChild(btn);
+  });
+}
+
+function applyTheme(theme) {
+  appState.theme = theme === "light" ? "light" : "dark";
+  if (appState.theme === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  els.themeToggleBtn.textContent =
+    appState.theme === "light" ? t("themeToDark") : t("themeToLight");
+  els.themeToggleBtn.title = t("themeTitle");
+  try {
+    localStorage.setItem("zmk_tester_theme", appState.theme);
+  } catch {
+    // ignore
+  }
+}
+
+function applyLanguage(lang) {
+  appState.lang = lang === "en" ? "en" : "zh";
+  document.documentElement.lang = appState.lang === "zh" ? "zh-CN" : "en";
+  document.title = t("pageTitle");
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+
+  els.lockHint.innerHTML = t("lockHintHtml");
+  els.langToggleBtn.textContent = t("langToggleText");
+  els.langToggleBtn.title = t("langTitle");
+  els.themeToggleBtn.textContent =
+    appState.theme === "light" ? t("themeToDark") : t("themeToLight");
+  els.themeToggleBtn.title = t("themeTitle");
+  els.loadBtn.textContent = appState.isLoading ? t("loadingBtn") : t("loadBtn");
+
+  if (!keyboardCtrl.hidSupported) {
+    els.connectHidBtn.title = t("connectHidUnsupported");
+  } else {
+    els.connectHidBtn.title = "";
+  }
+
+  renderPresets();
+  renderDevices(appState.hidDevices);
+  renderLockStatus(appState.lockStatus);
+  renderActiveModifiers(keyboardCtrl ? Array.from(keyboardCtrl.activeModifiers) : []);
+  renderInspector(appState.selectedKeyIdx, appState.lastKeyEvent);
+  renderEventLog();
+  updateCoverageMeta();
+
+  if (appState.config) {
+    const cfg = appState.config;
+    const repoLabel = cfg.isDemo ? t("demoRepoLabel") : cfg.repoLabel;
+    els.metaRepo.textContent = `${repoLabel} · ${cfg.keymapPath}`;
+    els.metaLayout.textContent = t("metaLayoutPrefix", {
+      name: cfg.layout.name,
+      source: cfg.layout.source,
+    });
+    renderKeyboard();
+  }
+
+  if (appState.lastBanner && appState.lastBanner.params !== null) {
+    setBanner(appState.lastBanner.msgOrKey, appState.lastBanner.type, appState.lastBanner.params);
+  }
+
+  try {
+    localStorage.setItem("zmk_tester_lang", appState.lang);
+  } catch {
+    // ignore
+  }
 }
 
 function applyLoadedConfig(cfg, sourceUrl = null) {
@@ -590,8 +644,12 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
   appState.testedLayerKeys.clear();
   appState.selectedKeyIdx = null;
 
-  els.metaRepo.textContent = `${cfg.repoLabel} · ${cfg.keymapPath}`;
-  els.metaLayout.textContent = `布局: ${cfg.layout.name} (${cfg.layout.source})`;
+  const repoLabel = cfg.isDemo ? t("demoRepoLabel") : cfg.repoLabel;
+  els.metaRepo.textContent = `${repoLabel} · ${cfg.keymapPath}`;
+  els.metaLayout.textContent = t("metaLayoutPrefix", {
+    name: cfg.layout.name,
+    source: cfg.layout.source,
+  });
   updateCoverageMeta();
 
   // Populate keymap selector if multiple .keymap files exist in repo
@@ -609,9 +667,8 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
     els.keymapSelectWrap.classList.add("hidden");
   }
 
-  renderLayerTabs();
   renderKeyboard();
-  renderInspector(null, null);
+  renderInspector(null, appState.lastKeyEvent);
 
   if (sourceUrl) {
     try {
@@ -620,10 +677,11 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
       // ignore storage errors
     }
   }
-  setBanner(
-    `已加载 ${cfg.repoLabel} (${cfg.keyCount} 键, ${cfg.layers.length} 层)。点击空白处并按键即可测试，建议开启“全屏锁定系统键”拦截 Esc / Cmd+W / 浏览器快捷键。`,
-    "success"
-  );
+  setBanner("bannerLoaded", "success", {
+    repo: repoLabel,
+    count: cfg.keyCount,
+    layers: cfg.layers.length,
+  });
 }
 
 // MARK: - Loading Handlers
@@ -631,23 +689,25 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
 async function loadFromUrlInput(preferredKeymap = null) {
   const url = els.repoUrlInput.value.trim();
   if (!url) {
-    setBanner("请输入 GitHub zmk-config 链接，或选择下方预设 / 本地文件夹。", "warn");
+    setBanner("bannerNeedUrl", "warn", {});
     return;
   }
   const token = els.tokenInput.value.trim() || null;
+  appState.isLoading = true;
   els.loadBtn.disabled = true;
-  els.loadBtn.textContent = "读取中...";
-  setBanner(`正在读取 ${url} ...`, "info");
+  els.loadBtn.textContent = t("loadingBtn");
+  setBanner("bannerLoading", "info", { url });
 
   try {
     const cfg = await loadZmkFromGitHub(url, { token, preferredKeymap });
     applyLoadedConfig(cfg, url);
     els.repoUrlInput.blur();
   } catch (err) {
-    setBanner(`读取失败: ${err.message}`, "error");
+    setBanner("bannerLoadError", "error", { msg: err.message });
   } finally {
+    appState.isLoading = false;
     els.loadBtn.disabled = false;
-    els.loadBtn.textContent = "读取布局";
+    els.loadBtn.textContent = t("loadBtn");
   }
 }
 
@@ -668,18 +728,36 @@ const keyboardCtrl = new KeyboardController({
 });
 
 function init() {
-  // Preset chips
-  PRESET_CONFIGS.forEach((p) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "preset-chip";
-    btn.textContent = p.label;
-    btn.addEventListener("click", () => {
-      els.repoUrlInput.value = p.url;
-      loadFromUrlInput();
-      btn.blur();
-    });
-    els.presetBar.appendChild(btn);
+  // Restore theme & language preferences
+  let initTheme = "dark";
+  let initLang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+  try {
+    const savedTheme = localStorage.getItem("zmk_tester_theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      initTheme = savedTheme;
+    } else if (window.matchMedia?.("(prefers-color-scheme: light)").matches) {
+      initTheme = "light";
+    }
+    const savedLang = localStorage.getItem("zmk_tester_lang");
+    if (savedLang === "zh" || savedLang === "en") {
+      initLang = savedLang;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  applyTheme(initTheme);
+  applyLanguage(initLang);
+
+  // Top-right theme & language toggles
+  els.themeToggleBtn.addEventListener("click", () => {
+    applyTheme(appState.theme === "dark" ? "light" : "dark");
+    els.themeToggleBtn.blur();
+  });
+
+  els.langToggleBtn.addEventListener("click", () => {
+    applyLanguage(appState.lang === "zh" ? "en" : "zh");
+    els.langToggleBtn.blur();
   });
 
   // Load button & Enter in URL input
@@ -714,7 +792,7 @@ function init() {
       const cfg = await loadZmkFromFileList(els.folderInput.files);
       applyLoadedConfig(cfg);
     } catch (err) {
-      setBanner(`本地目录读取失败: ${err.message}`, "error");
+      setBanner("bannerLocalError", "error", { msg: err.message });
     }
   });
 
@@ -724,7 +802,7 @@ function init() {
       const cfg = await loadZmkFromFileList(els.fileInput.files);
       applyLoadedConfig(cfg);
     } catch (err) {
-      setBanner(`文件读取失败: ${err.message}`, "error");
+      setBanner("bannerFileError", "error", { msg: err.message });
     }
   });
 
@@ -744,13 +822,14 @@ function init() {
       els.rawModal.classList.add("hidden");
       applyLoadedConfig(cfg);
     } catch (err) {
-      setBanner(`解析失败: ${err.message}`, "error");
+      setBanner("bannerParseError", "error", { msg: err.message });
     }
   });
 
   // Demo config button
   els.loadDemoBtn.addEventListener("click", async () => {
     const cfg = await loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap");
+    cfg.isDemo = true;
     applyLoadedConfig(cfg);
     els.loadDemoBtn.blur();
   });
@@ -771,9 +850,6 @@ function init() {
   });
 
   // WebHID device button
-  if (!keyboardCtrl.hidSupported) {
-    els.connectHidBtn.title = "仅 Chrome / Edge 桌面版支持 WebHID";
-  }
   els.connectHidBtn.addEventListener("click", async () => {
     try {
       await keyboardCtrl.requestHidDevice();
@@ -810,11 +886,6 @@ function init() {
     els.soundToggle.blur();
   });
 
-  els.autoLayerToggle.addEventListener("change", () => {
-    appState.autoSwitchLayer = els.autoLayerToggle.checked;
-    els.autoLayerToggle.blur();
-  });
-
   els.showIndicesToggle.addEventListener("change", () => {
     appState.showKeyIndices = els.showIndicesToggle.checked;
     renderKeyboard();
@@ -831,7 +902,7 @@ function init() {
 
   els.clearLogBtn.addEventListener("click", () => {
     appState.eventLog = [];
-    els.eventLogList.innerHTML = `<div class="muted">等待按键输入...</div>`;
+    renderEventLog();
     els.clearLogBtn.blur();
   });
 
@@ -851,14 +922,19 @@ function init() {
         const cfg = await loadZmkFromFileList(e.dataTransfer.files);
         applyLoadedConfig(cfg);
       } catch (err) {
-        setBanner(`拖放读取失败: ${err.message}`, "error");
+        setBanner("bannerDropError", "error", { msg: err.message });
       }
     }
   });
 
-  // Responsive resize
+  // Responsive resize: only re-render when unitPx actually changes
   const ro = new ResizeObserver(() => {
-    if (appState.config) renderKeyboard();
+    if (!appState.config) return;
+    const prevU = appState.unitPx;
+    computeUnitSize();
+    if (appState.unitPx !== prevU) {
+      renderKeyboard();
+    }
   });
   ro.observe(els.keyboardStage);
 
@@ -879,11 +955,14 @@ function init() {
   if (queryConfig) {
     els.repoUrlInput.value = queryConfig;
     loadFromUrlInput();
-  } else if (savedUrl) {
-    els.repoUrlInput.value = savedUrl;
-    loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap").then((cfg) => applyLoadedConfig(cfg));
   } else {
-    loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap").then((cfg) => applyLoadedConfig(cfg));
+    if (savedUrl) {
+      els.repoUrlInput.value = savedUrl;
+    }
+    loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap").then((cfg) => {
+      cfg.isDemo = true;
+      applyLoadedConfig(cfg);
+    });
   }
 }
 

@@ -14,26 +14,35 @@
         <span class="brand-icon">⌨️</span>
         <div>
           <h1>ZMK KeyTester</h1>
-          <p class="brand-sub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
+          <p class="brand-sub" data-i18n="brandSub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
         </div>
       </div>
 
       <div class="topbar-controls">
         <div class="devices-wrap">
-          <button id="connectHidBtn" type="button" class="btn btn-secondary btn-sm">
+          <button id="connectHidBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectHidBtn">
             识别 USB / 蓝牙键盘
           </button>
           <div id="devicesList" class="devices-list"></div>
         </div>
 
         <div class="lock-controls">
-          <label class="switch-label" title="开启后拦截浏览器与可捕获的系统按键">
+          <label class="switch-label" data-i18n-title="interceptTitle" title="开启后拦截浏览器与可捕获的系统按键">
             <input type="checkbox" id="interceptToggle" checked />
-            <span>拦截按键</span>
+            <span data-i18n="interceptLabel">拦截按键</span>
           </label>
-          <span id="lockBadge" class="lock-badge is-active">浏览器按键拦截已启用</span>
-          <button id="fullscreenLockBtn" type="button" class="btn btn-accent btn-sm">
+          <span id="lockBadge" class="lock-badge is-active" data-i18n="lockBadgeActive">浏览器按键拦截已启用</span>
+          <button id="fullscreenLockBtn" type="button" class="btn btn-accent btn-sm" data-i18n="btnFullscreenEnter">
             全屏锁定系统键
+          </button>
+        </div>
+
+        <div class="pref-controls">
+          <button id="themeToggleBtn" type="button" class="btn btn-secondary btn-sm" title="切换亮色 / 暗色主题">
+            ☀️ 亮色
+          </button>
+          <button id="langToggleBtn" type="button" class="btn btn-secondary btn-sm" title="Switch to English">
+            中 / EN
           </button>
         </div>
       </div>
@@ -46,19 +55,20 @@
           id="repoUrlInput"
           type="url"
           class="url-input"
+          data-i18n-placeholder="urlPlaceholder"
           placeholder="输入 ZMK Config GitHub 链接，例如: https://github.com/username/zmk-config 或 .keymap 链接"
           spellcheck="false"
         />
-        <button id="loadBtn" type="button" class="btn btn-primary">读取布局</button>
-        <button id="loadDemoBtn" type="button" class="btn btn-secondary">内置示例</button>
-        <button id="advancedToggleBtn" type="button" class="btn btn-ghost">更多方式 ▾</button>
+        <button id="loadBtn" type="button" class="btn btn-primary" data-i18n="loadBtn">读取布局</button>
+        <button id="loadDemoBtn" type="button" class="btn btn-secondary" data-i18n="loadDemoBtn">内置示例</button>
+        <button id="advancedToggleBtn" type="button" class="btn btn-ghost" data-i18n="advancedBtn">更多方式 ▾</button>
       </div>
 
       <div class="preset-row">
-        <span class="preset-title">快速预设:</span>
+        <span class="preset-title" data-i18n="presetTitle">快速预设:</span>
         <div id="presetBar" class="preset-bar"></div>
         <div id="keymapSelectWrap" class="keymap-select-wrap hidden">
-          <span>Keymap:</span>
+          <span data-i18n="keymapSelectLabel">Keymap:</span>
           <select id="keymapSelect" class="select-input"></select>
         </div>
       </div>
@@ -66,14 +76,14 @@
       <div id="advancedPanel" class="advanced-panel hidden">
         <div class="adv-item">
           <label class="btn btn-secondary btn-sm file-btn">
-            上传本地 zmk-config 文件夹
+            <span data-i18n="uploadFolderBtn">上传本地 zmk-config 文件夹</span>
             <input id="folderInput" type="file" webkitdirectory multiple hidden />
           </label>
           <label class="btn btn-secondary btn-sm file-btn">
-            选择 .keymap 文件
+            <span data-i18n="uploadFileBtn">选择 .keymap 文件</span>
             <input id="fileInput" type="file" accept=".keymap,.dtsi,.json" multiple hidden />
           </label>
-          <button id="openRawModalBtn" type="button" class="btn btn-secondary btn-sm">
+          <button id="openRawModalBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="pasteRawBtn">
             直接粘贴 .keymap 代码
           </button>
         </div>
@@ -82,6 +92,7 @@
             id="tokenInput"
             type="password"
             class="token-input"
+            data-i18n-placeholder="tokenPlaceholder"
             placeholder="可选: GitHub Token (私有仓库或突破 60次/时 限流)"
             autocomplete="off"
           />
@@ -96,29 +107,27 @@
       <section class="stage-panel">
         <!-- Toolbar above keyboard -->
         <div class="stage-toolbar">
-          <div id="layerTabs" class="layer-tabs"></div>
+          <div class="stage-title-wrap">
+            <span class="stage-title-badge" data-i18n="physicalLayoutBadge">物理布局视图</span>
+          </div>
 
           <div class="stage-options">
-            <label class="check-label" title="识别到按键按下时发出嘟声提示，无需看屏幕">
+            <label class="check-label" data-i18n-title="soundTitle" title="识别到按键按下时发出嘟声提示，无需看屏幕">
               <input type="checkbox" id="soundToggle" checked />
-              <span>按键提示音</span>
-            </label>
-            <label class="check-label" title="当前层找不到按键时自动切换到对应层">
-              <input type="checkbox" id="autoLayerToggle" checked />
-              <span>自动切换层</span>
+              <span data-i18n="soundLabel">按键提示音</span>
             </label>
             <label class="check-label">
               <input type="checkbox" id="showIndicesToggle" />
-              <span>显示键位编号</span>
+              <span data-i18n="showIndicesLabel">显示键位编号</span>
             </label>
-            <button id="resetTestedBtn" type="button" class="btn btn-ghost btn-sm">重置测试进度</button>
+            <button id="resetTestedBtn" type="button" class="btn btn-ghost btn-sm" data-i18n="resetTestedBtn">重置测试进度</button>
           </div>
         </div>
 
         <!-- Keyboard Meta Stats -->
         <div class="meta-bar">
-          <span id="metaRepo" class="meta-pill">未加载配置</span>
-          <span id="metaLayout" class="meta-pill">布局: -</span>
+          <span id="metaRepo" class="meta-pill" data-i18n="metaRepoEmpty">未加载配置</span>
+          <span id="metaLayout" class="meta-pill" data-i18n="metaLayoutEmpty">布局: -</span>
           <span id="metaCoverage" class="meta-pill is-highlight">已测试 0 / 0 (0%)</span>
         </div>
 
@@ -130,33 +139,31 @@
         <!-- Active Modifiers Footer -->
         <div class="stage-footer">
           <div class="mods-wrap">
-            <span class="mods-title">按住修饰键:</span>
+            <span class="mods-title" data-i18n="modsTitle">按住修饰键:</span>
             <div id="activeModsBar" class="active-mods-bar">
-              <span class="muted">当前无按住修饰键</span>
+              <span class="muted" data-i18n="modsEmpty">当前无按住修饰键</span>
             </div>
           </div>
-          <div class="lock-hint">
-            提示: 浏览器普通模式下已拦截 Tab / 方向键 / F1-F12 / 空格翻页；点击右上角 <strong>全屏锁定系统键</strong> (Chrome/Edge) 可进一步拦截 Esc / Cmd+W / Ctrl+W / 系统快捷键。系统内核级快捷键 (如 Cmd+Tab、Cmd+Space、Win+L) 受操作系统安全策略限制无法由网页接管。
-          </div>
+          <div id="lockHint" class="lock-hint"></div>
         </div>
       </section>
 
       <!-- Right Sidebar: Inspector & History -->
       <aside class="side-panel">
         <div class="side-card">
-          <h3>按键详情</h3>
+          <h3 data-i18n="inspectorTitle">按键详情</h3>
           <div id="inspectorCard" class="inspector-card">
-            <div class="muted">按下键盘按键，或点击布局上的按键查看详细 ZMK 绑定。</div>
+            <div class="muted" data-i18n="inspectorEmpty">按下键盘按键，或点击布局上的按键查看详细 ZMK 绑定。</div>
           </div>
         </div>
 
         <div class="side-card side-log-card">
           <div class="side-card-head">
-            <h3>按键记录</h3>
-            <button id="clearLogBtn" type="button" class="btn btn-ghost btn-xs">清空</button>
+            <h3 data-i18n="eventLogTitle">按键记录</h3>
+            <button id="clearLogBtn" type="button" class="btn btn-ghost btn-xs" data-i18n="clearLogBtn">清空</button>
           </div>
           <div id="eventLogList" class="event-log-list">
-            <div class="muted">等待按键输入...</div>
+            <div class="muted" data-i18n="eventLogEmpty">等待按键输入...</div>
           </div>
         </div>
       </aside>
@@ -167,16 +174,17 @@
   <div id="rawModal" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
-        <h3>粘贴 .keymap 内容</h3>
-        <button id="closeRawModalBtn" type="button" class="btn btn-ghost btn-sm">关闭</button>
+        <h3 data-i18n="rawModalTitle">粘贴 .keymap 内容</h3>
+        <button id="closeRawModalBtn" type="button" class="btn btn-ghost btn-sm" data-i18n="rawModalClose">关闭</button>
       </div>
       <textarea
         id="rawKeymapText"
         class="raw-textarea"
+        data-i18n-placeholder="rawTextareaPlaceholder"
         placeholder="在此粘贴完整的 ZMK .keymap 文件内容..."
       ></textarea>
       <div class="modal-actions">
-        <button id="loadRawBtn" type="button" class="btn btn-primary">解析并显示</button>
+        <button id="loadRawBtn" type="button" class="btn btn-primary" data-i18n="rawModalLoad">解析并显示</button>
       </div>
     </div>
   </div>

@@ -13,6 +13,7 @@ import {
   parseWestYml,
 } from "../src/zmk-parser.js";
 import { parseGitHubUrl } from "../src/github-loader.js";
+import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
 
@@ -252,4 +253,12 @@ test("SoundBeeper safely handles disabled mode and missing AudioContext", () => 
   assert.doesNotThrow(() => beeper.beepCompleted());
   beeper.enabled = false;
   assert.doesNotThrow(() => beeper.beepKey({ matched: true }));
+});
+
+test("i18n zh and en dictionaries have complete key parity and interpolation", () => {
+  const zhKeys = Object.keys(MESSAGES.zh).sort();
+  const enKeys = Object.keys(MESSAGES.en).sort();
+  assert.deepEqual(zhKeys, enKeys);
+  assert.equal(formatMessage("zh", "metaCoverage", { tested: 5, total: 42, pct: 12 }), "已测试 5 / 42 (12%)");
+  assert.equal(formatMessage("en", "metaCoverage", { tested: 5, total: 42, pct: 12 }), "Tested 5 / 42 (12%)");
 });

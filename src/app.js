@@ -2,11 +2,11 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=4";
-import { formatMessage } from "./i18n.js?v=4";
-import { KeyboardController } from "./keyboard-lock.js?v=4";
-import { SoundBeeper } from "./sound.js?v=4";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=4";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=5";
+import { formatMessage } from "./i18n.js?v=5";
+import { KeyboardController } from "./keyboard-lock.js?v=5";
+import { SoundBeeper } from "./sound.js?v=5";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=5";
 
 const soundBeeper = new SoundBeeper();
 
@@ -134,6 +134,8 @@ const els = {
   loadRawBtn: document.getElementById("loadRawBtn"),
   loadDemoBtn: document.getElementById("loadDemoBtn"),
   presetBar: document.getElementById("presetBar"),
+  branchSelect: document.getElementById("branchSelect"),
+  branchSelectWrap: document.getElementById("branchSelectWrap"),
   keymapSelect: document.getElementById("keymapSelect"),
   keymapSelectWrap: document.getElementById("keymapSelectWrap"),
   statusBanner: document.getElementById("statusBanner"),
@@ -645,12 +647,28 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
   appState.selectedKeyIdx = null;
 
   const repoLabel = cfg.isDemo ? t("demoRepoLabel") : cfg.repoLabel;
-  els.metaRepo.textContent = `${repoLabel} · ${cfg.keymapPath}`;
+  const branchTag = cfg.currentBranch ? ` (${cfg.currentBranch})` : "";
+  els.metaRepo.textContent = `${repoLabel}${branchTag} · ${cfg.keymapPath}`;
   els.metaLayout.textContent = t("metaLayoutPrefix", {
     name: cfg.layout.name,
     source: cfg.layout.source,
   });
   updateCoverageMeta();
+
+  // Populate branch selector if multiple branches exist in repo
+  if (cfg.branches && cfg.branches.length > 1) {
+    els.branchSelectWrap.classList.remove("hidden");
+    els.branchSelect.innerHTML = cfg.branches
+      .map(
+        (b) =>
+          `<option value="${escapeHtml(b)}"${b === cfg.currentBranch ? " selected" : ""}>${escapeHtml(
+            b
+          )}${b === cfg.defaultBranch ? " (default)" : ""}</option>`
+      )
+      .join("");
+  } else {
+    els.branchSelectWrap.classList.add("hidden");
+  }
 
   // Populate keymap selector if multiple .keymap files exist in repo
   if (cfg.availableKeymaps && cfg.availableKeymaps.length > 1) {
@@ -678,7 +696,7 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
     }
   }
   setBanner("bannerLoaded", "success", {
-    repo: repoLabel,
+    repo: `${repoLabel}${branchTag}`,
     count: cfg.keyCount,
     layers: cfg.layers.length,
   });
@@ -686,7 +704,7 @@ function applyLoadedConfig(cfg, sourceUrl = null) {
 
 // MARK: - Loading Handlers
 
-async function loadFromUrlInput(preferredKeymap = null) {
+async function loadFromUrlInput(preferredKeymap = null, preferredBranch = null) {
   const url = els.repoUrlInput.value.trim();
   if (!url) {
     setBanner("bannerNeedUrl", "warn", {});
@@ -696,11 +714,28 @@ async function loadFromUrlInput(preferredKeymap = null) {
   appState.isLoading = true;
   els.loadBtn.disabled = true;
   els.loadBtn.textContent = t("loadingBtn");
-  setBanner("bannerLoading", "info", { url });
+
+  if (preferredBranch) {
+    setBanner("bannerBranchSwitching", "info", { branch: preferredBranch });
+  } else {
+    setBanner("bannerLoading", "info", { url });
+  }
 
   try {
-    const cfg = await loadZmkFromGitHub(url, { token, preferredKeymap });
-    applyLoadedConfig(cfg, url);
+    const cfg = await loadZmkFromGitHub(url, { token, preferredKeymap, preferredBranch });
+    let effectiveUrl = url;
+    if (cfg.owner && cfg.repo && cfg.currentBranch) {
+      effectiveUrl = `https://github.com/${cfg.owner}/${cfg.repo}/tree/${cfg.currentBranch}`;
+      els.repoUrlInput.value = effectiveUrl;
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set("config", effectiveUrl);
+        window.history.replaceState({}, "", u.toString());
+      } catch {
+        // ignore history errors
+      }
+    }
+    applyLoadedConfig(cfg, effectiveUrl);
     els.repoUrlInput.blur();
   } catch (err) {
     setBanner("bannerLoadError", "error", { msg: err.message });
@@ -773,9 +808,18 @@ function init() {
   els.tokenInput.addEventListener("focus", () => renderLockStatus({ ...appState.lockStatus, isTypingInInput: true }));
   els.tokenInput.addEventListener("blur", () => renderLockStatus({ ...appState.lockStatus, isTypingInInput: keyboardCtrl.isTypingInInput() }));
 
+  // Branch switcher
+  els.branchSelect.addEventListener("change", () => {
+    loadFromUrlInput(null, els.branchSelect.value);
+    els.branchSelect.blur();
+  });
+
   // Keymap switcher for multi-keymap repos
   els.keymapSelect.addEventListener("change", () => {
-    loadFromUrlInput(els.keymapSelect.value);
+    const activeBranch = els.branchSelectWrap.classList.contains("hidden")
+      ? null
+      : els.branchSelect.value || null;
+    loadFromUrlInput(els.keymapSelect.value, activeBranch);
     els.keymapSelect.blur();
   });
 

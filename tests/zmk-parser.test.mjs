@@ -13,7 +13,7 @@ import {
   parsePhysicalLayoutsFromDts,
   parseWestYml,
 } from "../src/zmk-parser.js";
-import { parseGitHubUrl } from "../src/github-loader.js";
+import { disambiguateBranchAndPath, parseGitHubUrl } from "../src/github-loader.js";
 import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
@@ -55,6 +55,25 @@ test("parseGitHubUrl handles repo, tree, blob, raw, and shorthand URLs", () => {
     repo: "zmk-config",
     branch: null,
     path: null,
+  });
+
+  // Branch & path disambiguation for branches with slashes
+  const knownBranches = ["main", "36-trackball", "debug/touch-log", "feat/tps43-any-half"];
+  assert.deepEqual(disambiguateBranchAndPath("debug/touch-log", knownBranches), {
+    branch: "debug/touch-log",
+    path: null,
+  });
+  assert.deepEqual(disambiguateBranchAndPath("debug/touch-log/config/velvet.keymap", knownBranches), {
+    branch: "debug/touch-log",
+    path: "config/velvet.keymap",
+  });
+  assert.deepEqual(disambiguateBranchAndPath("36-trackball/config/velvet.keymap", knownBranches), {
+    branch: "36-trackball",
+    path: "config/velvet.keymap",
+  });
+  assert.deepEqual(disambiguateBranchAndPath("unknown-branch/some/path", knownBranches), {
+    branch: "unknown-branch",
+    path: "some/path",
   });
 });
 

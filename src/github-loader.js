@@ -9,7 +9,7 @@ import {
   parseMatrixTransformLayouts,
   parsePhysicalLayoutsFromDts,
   pickBestLayout,
-} from "./zmk-parser.js?v=4";
+} from "./zmk-parser.js?v=5";
 
 const RELEVANT_EXTS = [
   ".keymap",
@@ -59,19 +59,77 @@ export function parseGitHubUrl(input) {
 
   // github.com/owner/repo/(tree|blob)/branch/path?
   const ghMatch = url.match(
-    /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/(tree|blob)\/([^/]+)(?:\/(.*))?)?\/?$/
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/(tree|blob)\/(.+))?\/?$/
   );
   if (ghMatch) {
+    const kind = ghMatch[3] || "repo";
+    const remainder = ghMatch[4] || null;
+    let branch = null;
+    let path = null;
+    if (remainder) {
+      if (kind === "blob") {
+        const slash = remainder.indexOf("/");
+        if (slash !== -1) {
+          branch = remainder.slice(0, slash);
+          path = remainder.slice(slash + 1);
+        } else {
+          path = remainder;
+        }
+      } else {
+        branch = remainder;
+      }
+    }
     return {
-      kind: ghMatch[3] || "repo",
+      kind,
       owner: ghMatch[1],
       repo: ghMatch[2],
-      branch: ghMatch[4] || null,
-      path: ghMatch[5] || null,
+      branch,
+      path,
     };
   }
 
   return null;
+}
+
+export function disambiguateBranchAndPath(remainder, knownBranches = []) {
+  if (!remainder) return { branch: null, path: null };
+  const sorted = [...knownBranches].sort((a, b) => b.length - a.length);
+  for (const br of sorted) {
+    if (remainder === br) return { branch: br, path: null };
+    if (remainder.startsWith(br + "/")) {
+      return { branch: br, path: remainder.slice(br.length + 1) };
+    }
+  }
+  const slash = remainder.indexOf("/");
+  if (slash === -1) return { branch: remainder, path: null };
+  return { branch: remainder.slice(0, slash), path: remainder.slice(slash + 1) };
+}
+
+export async function getGitHubBranches(owner, repo, token = null) {
+  try {
+    const list = await fetchJson(
+      `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
+      token
+    );
+    if (Array.isArray(list)) {
+      return list.map((b) => b.name);
+    }
+  } catch {
+    // Non-fatal if branches listing fails (e.g. rate limit, offline)
+  }
+  return [];
+}
+
+export async function getGitHubRepoInfo(owner, repo, token = null) {
+  try {
+    const info = await fetchJson(
+      `https://api.github.com/repos/${owner}/${repo}`,
+      token
+    );
+    return info && typeof info === "object" ? info : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchJson(url, token = null) {
@@ -252,7 +310,10 @@ async function fetchUpstreamAndModuleLayouts({
 /**
  * Load and parse a ZMK config from a GitHub URL (repo / tree / blob / raw).
  */
-export async function loadZmkFromGitHub(url, { token = null, preferredKeymap = null } = {}) {
+export async function loadZmkFromGitHub(
+  url,
+  { token = null, preferredKeymap = null, preferredBranch = null } = {}
+) {
   const gh = parseGitHubUrl(url);
   if (!gh) {
     throw new Error(
@@ -262,16 +323,57 @@ export async function loadZmkFromGitHub(url, { token = null, preferredKeymap = n
 
   const repoLabel = `${gh.owner}/${gh.repo}`;
 
+  let availableBranches = [];
+  let defaultBranch = null;
+  if (gh.kind !== "raw") {
+    try {
+      const [branches, repoInfo] = await Promise.all([
+        getGitHubBranches(gh.owner, gh.repo, token),
+        getGitHubRepoInfo(gh.owner, gh.repo, token),
+      ]);
+      availableBranches = branches || [];
+      defaultBranch =
+        repoInfo?.default_branch ||
+        (availableBranches.includes("main")
+          ? "main"
+          : availableBranches.includes("master")
+          ? "master"
+          : availableBranches[0] || null);
+    } catch {
+      // Non-fatal if branches listing fails
+    }
+  }
+
+  let targetBranch = preferredBranch || gh.branch;
+  let targetPath = gh.path;
+  const rawRemainder = gh.path ? `${gh.branch}/${gh.path}` : gh.branch;
+  if (!preferredBranch && availableBranches.length > 0 && rawRemainder) {
+    const resolved = disambiguateBranchAndPath(rawRemainder, availableBranches);
+    if (resolved.branch) {
+      targetBranch = resolved.branch;
+      targetPath = resolved.path;
+    }
+  }
+
+  const activeBranch = targetBranch || defaultBranch || "HEAD";
+
+  if (defaultBranch && !availableBranches.includes(defaultBranch)) {
+    availableBranches.unshift(defaultBranch);
+  }
+  if (activeBranch && activeBranch !== "HEAD" && !availableBranches.includes(activeBranch)) {
+    availableBranches.push(activeBranch);
+  }
+
   // Direct raw file link OR direct blob/.keymap link (fast path, zero API quota, avoids monorepo tree truncation)
-  if ((gh.kind === "raw" || gh.kind === "blob") && gh.path && gh.path.toLowerCase().endsWith(".keymap")) {
-    const branch = gh.branch || "HEAD";
+  if ((gh.kind === "raw" || gh.kind === "blob") && targetPath && targetPath.toLowerCase().endsWith(".keymap")) {
+    const branch = activeBranch;
     const mainText = await fetchRawText(
-      `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}/${gh.path}`
+      `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}/${targetPath}`
     );
     if (!mainText) throw new Error(`无法读取文件: ${url}`);
 
-    const files = { [gh.path]: mainText };
-    const dir = gh.path.includes("/") ? gh.path.slice(0, gh.path.lastIndexOf("/")) : "";
+    const files = { [targetPath]: mainText };
+    const dir = targetPath.includes("/") ? targetPath.slice(0, targetPath.lastIndexOf("/")) : "";
 
     // Fetch companion metadata & local includes in parallel without hitting REST API
     const extraPaths = new Set(["build.yaml", "build.yml", "config/west.yml"]);
@@ -284,7 +386,7 @@ export async function loadZmkFromGitHub(url, { token = null, preferredKeymap = n
       }
     }
     // Also probe same-directory layout/dtsi/json files for shield folders (e.g. sofle.dtsi)
-    const baseName = gh.path.split("/").pop().replace(/\.keymap$/i, "");
+    const baseName = targetPath.split("/").pop().replace(/\.keymap$/i, "");
     if (dir) {
       extraPaths.add(`${dir}/${baseName}.dtsi`);
       extraPaths.add(`${dir}/${baseName}-layouts.dtsi`);
@@ -302,15 +404,24 @@ export async function loadZmkFromGitHub(url, { token = null, preferredKeymap = n
       })
     );
 
-    return buildZmkConfigResult({
+    const result = await buildZmkConfigResult({
       files,
       repoLabel,
-      preferredKeymap: gh.path,
+      preferredKeymap: targetPath,
       fetchExternalLayouts: (args) => fetchUpstreamAndModuleLayouts({ ...args, token }),
     });
+
+    return {
+      ...result,
+      owner: gh.owner,
+      repo: gh.repo,
+      branches: availableBranches,
+      currentBranch: activeBranch,
+      defaultBranch,
+    };
   }
 
-  const { ref, tree } = await getGitHubTree(gh.owner, gh.repo, gh.branch, token);
+  const { ref, tree } = await getGitHubTree(gh.owner, gh.repo, activeBranch, token);
   const allRelevant = tree
     .filter((item) => item.type === "blob" && isRelevantPath(item.path))
     .map((item) => item.path);
@@ -335,14 +446,23 @@ export async function loadZmkFromGitHub(url, { token = null, preferredKeymap = n
 
   const targetKeymap =
     preferredKeymap ||
-    (gh.path && gh.path.endsWith(".keymap") && files[gh.path] ? gh.path : null);
+    (targetPath && targetPath.endsWith(".keymap") && files[targetPath] ? targetPath : null);
 
-  return buildZmkConfigResult({
+  const result = await buildZmkConfigResult({
     files,
     repoLabel,
     preferredKeymap: targetKeymap,
     fetchExternalLayouts: (args) => fetchUpstreamAndModuleLayouts({ ...args, token }),
   });
+
+  return {
+    ...result,
+    owner: gh.owner,
+    repo: gh.repo,
+    branches: availableBranches,
+    currentBranch: activeBranch,
+    defaultBranch,
+  };
 }
 
 /**

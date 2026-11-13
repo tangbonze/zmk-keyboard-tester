@@ -34,6 +34,7 @@ export const MESSAGES = {
     presetSofle: "Sofle (ZMK 官方)",
     presetLily58: "Lily58 (ZMK 官方)",
     presetCradio: "Sweep / Cradio",
+    branchSelectLabel: "分支:",
     keymapSelectLabel: "Keymap:",
     uploadFolderBtn: "上传本地 zmk-config 文件夹",
     uploadFileBtn: "选择 .keymap 文件",
@@ -72,6 +73,7 @@ export const MESSAGES = {
     rawModalLoad: "解析并显示",
     bannerNeedUrl: "请输入 GitHub zmk-config 链接，或选择下方预设 / 本地文件夹。",
     bannerLoading: "正在读取 {url} ...",
+    bannerBranchSwitching: "正在切换至分支 {branch} ...",
     bannerLoaded:
       "已加载 {repo} 物理布局（共 {count} 个按键）。按下键盘按键即可亮起并发出提示音，建议开启“全屏锁定系统键”。",
     bannerLoadError: "读取失败: {msg}",
@@ -112,6 +114,7 @@ export const MESSAGES = {
     presetSofle: "Sofle (Official ZMK)",
     presetLily58: "Lily58 (Official ZMK)",
     presetCradio: "Sweep / Cradio",
+    branchSelectLabel: "Branch:",
     keymapSelectLabel: "Keymap:",
     uploadFolderBtn: "Upload Local zmk-config Folder",
     uploadFileBtn: "Select .keymap File",
@@ -150,6 +153,7 @@ export const MESSAGES = {
     rawModalLoad: "Parse & Display",
     bannerNeedUrl: "Please enter a GitHub zmk-config URL, or pick a preset / local folder below.",
     bannerLoading: "Loading {url} ...",
+    bannerBranchSwitching: "Switching to branch {branch} ...",
     bannerLoaded:
       "Loaded {repo} physical layout ({count} keys). Press any key to light up and beep; enable Fullscreen Key Lock for Esc / Cmd+W interception.",
     bannerLoadError: "Failed to load: {msg}",

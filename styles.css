@@ -400,13 +400,28 @@ body {
   border-color: var(--primary);
 }
 
-.keymap-select-wrap {
+.selector-controls {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.branch-select-wrap,
+.keymap-select-wrap {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+.branch-select-wrap select,
+.keymap-select-wrap select {
+  padding: 4px 8px;
+  font-size: 12px;
+  max-width: 200px;
 }
 
 .advanced-panel {

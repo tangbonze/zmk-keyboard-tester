@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZMK KeyTester — 在线 ZMK 键盘测试器</title>
-  <link rel="stylesheet" href="./styles.css?v=4" />
+  <link rel="stylesheet" href="./styles.css?v=5" />
 </head>
 <body>
   <div class="app-shell">
@@ -67,9 +67,15 @@
       <div class="preset-row">
         <span class="preset-title" data-i18n="presetTitle">快速预设:</span>
         <div id="presetBar" class="preset-bar"></div>
-        <div id="keymapSelectWrap" class="keymap-select-wrap hidden">
-          <span data-i18n="keymapSelectLabel">Keymap:</span>
-          <select id="keymapSelect" class="select-input"></select>
+        <div class="selector-controls">
+          <div id="branchSelectWrap" class="branch-select-wrap hidden">
+            <span data-i18n="branchSelectLabel">分支:</span>
+            <select id="branchSelect" class="select-input"></select>
+          </div>
+          <div id="keymapSelectWrap" class="keymap-select-wrap hidden">
+            <span data-i18n="keymapSelectLabel">Keymap:</span>
+            <select id="keymapSelect" class="select-input"></select>
+          </div>
         </div>
       </div>
 
@@ -189,6 +195,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=4"></script>
+  <script type="module" src="./src/app.js?v=5"></script>
 </body>
 </html>

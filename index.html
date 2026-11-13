@@ -4,17 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZMK KeyTester — 在线 ZMK 键盘测试器</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32x32.png?v=9" />
-  <link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png?v=9" />
-  <link rel="apple-touch-icon" sizes="192x192" href="./assets/favicon-192x192.png?v=9" />
-  <link rel="stylesheet" href="./styles.css?v=9" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="./styles.css?v=10" />
 </head>
 <body>
   <div class="app-shell">
     <!-- Top Header -->
     <header class="topbar">
       <div class="brand">
-        <img class="brand-icon-img" src="./assets/keebnerd.webp?v=9" alt="Keebnerd" width="34" height="34" />
+        <a
+          href="https://www.aliexpress.com/store/1105251228"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="brand-logo-link"
+          data-i18n-title="storeLinkTitle"
+          title="访问 KEYME AliExpress 官方店铺"
+        >
+          <img class="brand-logo-img" src="./assets/keyme-logo.png?v=10" alt="KEYME" height="28" />
+        </a>
         <div>
           <h1>ZMK KeyTester</h1>
           <p class="brand-sub" data-i18n="brandSub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
@@ -46,6 +53,18 @@
         </div>
 
         <div class="pref-controls">
+          <a
+            id="storeLinkBtn"
+            href="https://www.aliexpress.com/store/1105251228"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-store btn-sm"
+            data-i18n="storeLinkBtn"
+            data-i18n-title="storeLinkTitle"
+            title="访问 KEYME AliExpress 官方店铺"
+          >
+            🛒 KEYME 商店 ↗
+          </a>
           <button id="themeToggleBtn" type="button" class="btn btn-secondary btn-sm" title="切换亮色 / 暗色主题">
             ☀️ 亮色
           </button>
@@ -203,6 +222,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=9"></script>
+  <script type="module" src="./src/app.js?v=10"></script>
 </body>
 </html>

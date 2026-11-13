@@ -2,13 +2,13 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=8";
-import { formatMessage } from "./i18n.js?v=8";
-import { KeyboardController } from "./keyboard-lock.js?v=8";
-import { SerialMatrixMonitor } from "./matrix-serial.js?v=8";
-import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=8";
-import { SoundBeeper } from "./sound.js?v=8";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=8";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=10";
+import { formatMessage } from "./i18n.js?v=10";
+import { KeyboardController } from "./keyboard-lock.js?v=10";
+import { SerialMatrixMonitor } from "./matrix-serial.js?v=10";
+import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=10";
+import { SoundBeeper } from "./sound.js?v=10";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=10";
 
 const soundBeeper = new SoundBeeper();
 

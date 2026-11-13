@@ -6,6 +6,8 @@ export const MESSAGES = {
   zh: {
     pageTitle: "ZMK KeyTester — 在线 ZMK 键盘物理布局测试器",
     brandSub: "读取 GitHub zmk-config 物理布局 · 实时按键亮起 · 提示音 · 系统键拦截",
+    storeLinkBtn: "🛒 KEYME 商店 ↗",
+    storeLinkTitle: "访问 KEYME AliExpress 官方店铺",
     connectSerialBtn: "有线串口直读矩阵",
     disconnectSerialBtn: "断开串口",
     serialConnectedBadge: "有线串口已连接",
@@ -97,6 +99,8 @@ export const MESSAGES = {
   en: {
     pageTitle: "ZMK KeyTester — Online ZMK Physical Layout Tester",
     brandSub: "Load GitHub zmk-config physical layout · Live highlight · Beep · System key lock",
+    storeLinkBtn: "🛒 KEYME Store ↗",
+    storeLinkTitle: "Visit KEYME Official AliExpress Store",
     connectSerialBtn: "Wired Serial Matrix",
     disconnectSerialBtn: "Disconnect Serial",
     serialConnectedBadge: "Wired Serial Connected",

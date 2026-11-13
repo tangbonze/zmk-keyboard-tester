@@ -711,6 +711,8 @@ export function parseInfoJsonLayouts(text, filename = "info.json") {
       const y = Number(item.y);
       keys.push({
         index: i,
+        row: item.row !== undefined ? Number(item.row) : null,
+        col: item.col !== undefined ? Number(item.col) : null,
         w: Number(item.w ?? 1),
         h: Number(item.h ?? 1),
         x,
@@ -757,6 +759,8 @@ export function parseMatrixTransformLayouts(text) {
           const splitCol = maxCol >= 7 ? Math.floor((maxCol + 1) / 2) : null;
           const keys = coords.map(([r, c], i) => ({
             index: i,
+            row: r,
+            col: c,
             w: 1,
             h: 1,
             x: c + (splitCol !== null && c >= splitCol ? 0.8 : 0),

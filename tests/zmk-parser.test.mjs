@@ -17,6 +17,7 @@ import { disambiguateBranchAndPath, parseGitHubUrl } from "../src/github-loader.
 import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
+import { parseZmkMatrixLog } from "../src/matrix-serial.js";
 
 test("parseGitHubUrl handles repo, tree, blob, raw, and shorthand URLs", () => {
   assert.deepEqual(parseGitHubUrl("https://github.com/foo/zmk-config"), {
@@ -302,4 +303,41 @@ test("normalizeLayoutBounds accounts for key rotation geometry without inflating
   assert.equal(norm.keys.length, 3);
   assert.ok(norm.keys[0].x >= 0.2);
   assert.ok(norm.keys[0].y >= 0.2);
+});
+
+test("parseZmkMatrixLog parses ZMK kscan logs correctly", () => {
+  const line1 =
+    "[00:01:23.456,789] <dbg> zmk: zmk_kscan_process_msgq: Row: 0, col: 19, position: 36, pressed: true";
+  const ev1 = parseZmkMatrixLog(line1);
+  assert.deepEqual(ev1, {
+    row: 0,
+    col: 19,
+    position: 36,
+    pressed: true,
+    rawLine: line1,
+  });
+
+  const line2 =
+    "[00:01:23.600,000] <dbg> zmk: zmk_kscan_process_msgq: Row: 2, col: 5, position: 22, pressed: false";
+  const ev2 = parseZmkMatrixLog(line2);
+  assert.deepEqual(ev2, {
+    row: 2,
+    col: 5,
+    position: 22,
+    pressed: false,
+    rawLine: line2,
+  });
+
+  const line3 = "<dbg> zmk: kscan_gpio_read: Sending event at 1,4 state on";
+  const ev3 = parseZmkMatrixLog(line3);
+  assert.deepEqual(ev3, {
+    row: 1,
+    col: 4,
+    position: null,
+    pressed: true,
+    rawLine: line3,
+  });
+
+  assert.equal(parseZmkMatrixLog("random noise log line"), null);
+  assert.equal(parseZmkMatrixLog(null), null);
 });

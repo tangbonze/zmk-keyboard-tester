@@ -2,13 +2,13 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=7";
-import { formatMessage } from "./i18n.js?v=7";
-import { KeyboardController } from "./keyboard-lock.js?v=7";
-import { SerialMatrixMonitor } from "./matrix-serial.js?v=7";
-import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=7";
-import { SoundBeeper } from "./sound.js?v=7";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=7";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=8";
+import { formatMessage } from "./i18n.js?v=8";
+import { KeyboardController } from "./keyboard-lock.js?v=8";
+import { SerialMatrixMonitor } from "./matrix-serial.js?v=8";
+import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=8";
+import { SoundBeeper } from "./sound.js?v=8";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=8";
 
 const soundBeeper = new SoundBeeper();
 
@@ -146,7 +146,6 @@ const els = {
   lockBadge: document.getElementById("lockBadge"),
   themeToggleBtn: document.getElementById("themeToggleBtn"),
   langToggleBtn: document.getElementById("langToggleBtn"),
-  connectHidBtn: document.getElementById("connectHidBtn"),
   connectBleBtn: document.getElementById("connectBleBtn"),
   bleBadge: document.getElementById("bleBadge"),
   connectSerialBtn: document.getElementById("connectSerialBtn"),
@@ -607,12 +606,6 @@ function applyLanguage(lang) {
   els.themeToggleBtn.title = t("themeTitle");
   els.loadBtn.textContent = appState.isLoading ? t("loadingBtn") : t("loadBtn");
 
-  if (!keyboardCtrl.hidSupported) {
-    els.connectHidBtn.title = t("connectHidUnsupported");
-  } else {
-    els.connectHidBtn.title = "";
-  }
-
   if (typeof studioBleClient !== "undefined" && studioBleClient) {
     if (!studioBleClient.bleSupported) {
       els.connectBleBtn.title = t("studioBleUnsupported");
@@ -1017,18 +1010,6 @@ function init() {
       keyboardCtrl.enterFullscreenLock();
     }
     els.fullscreenLockBtn.blur();
-  });
-
-  // WebHID device button
-  els.connectHidBtn.addEventListener("click", async () => {
-    try {
-      await keyboardCtrl.requestHidDevice();
-    } catch (err) {
-      if (err.name !== "NotFoundError") {
-        setBanner(err.message, "warn");
-      }
-    }
-    els.connectHidBtn.blur();
   });
 
   // ZMK Studio Web Bluetooth button

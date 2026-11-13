@@ -886,15 +886,26 @@ function init() {
   let initTheme = "dark";
   let initLang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
   try {
-    const savedTheme = localStorage.getItem("zmk_tester_theme");
-    if (savedTheme === "light" || savedTheme === "dark") {
-      initTheme = savedTheme;
-    } else if (window.matchMedia?.("(prefers-color-scheme: light)").matches) {
-      initTheme = "light";
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryLang = urlParams.get("lang");
+    if (queryLang === "zh" || queryLang === "en") {
+      initLang = queryLang;
+    } else {
+      const savedLang = localStorage.getItem("zmk_tester_lang");
+      if (savedLang === "zh" || savedLang === "en") {
+        initLang = savedLang;
+      }
     }
-    const savedLang = localStorage.getItem("zmk_tester_lang");
-    if (savedLang === "zh" || savedLang === "en") {
-      initLang = savedLang;
+    const queryTheme = urlParams.get("theme");
+    if (queryTheme === "light" || queryTheme === "dark") {
+      initTheme = queryTheme;
+    } else {
+      const savedTheme = localStorage.getItem("zmk_tester_theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        initTheme = savedTheme;
+      } else if (window.matchMedia?.("(prefers-color-scheme: light)").matches) {
+        initTheme = "light";
+      }
     }
   } catch {
     // ignore storage errors

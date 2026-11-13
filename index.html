@@ -4,14 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZMK KeyTester — 在线 ZMK 键盘测试器</title>
-  <link rel="stylesheet" href="./styles.css?v=8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32x32.png?v=9" />
+  <link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon.png?v=9" />
+  <link rel="apple-touch-icon" sizes="192x192" href="./assets/favicon-192x192.png?v=9" />
+  <link rel="stylesheet" href="./styles.css?v=9" />
 </head>
 <body>
   <div class="app-shell">
     <!-- Top Header -->
     <header class="topbar">
       <div class="brand">
-        <span class="brand-icon">⌨️</span>
+        <img class="brand-icon-img" src="./assets/keebnerd.webp?v=9" alt="Keebnerd" width="34" height="34" />
         <div>
           <h1>ZMK KeyTester</h1>
           <p class="brand-sub" data-i18n="brandSub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
@@ -200,6 +203,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=8"></script>
+  <script type="module" src="./src/app.js?v=9"></script>
 </body>
 </html>

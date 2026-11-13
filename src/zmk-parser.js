@@ -858,28 +858,62 @@ export function normalizeLayoutBounds(layout) {
   const keys = layout.keys || [];
   if (keys.length === 0) return { ...layout, widthU: 1, heightU: 1 };
 
-  const minX = Math.min(...keys.map((k) => k.x));
-  const minY = Math.min(...keys.map((k) => k.y));
-  const padX = minX < 0 ? -minX + 0.2 : -minX + 0.1;
-  const padY = minY < 0 ? -minY + 0.2 : -minY + 0.1;
+  // Calculate visual bounding corners for each key, accounting for rotation (r, rx, ry)
+  function getKeyVisualCorners(k) {
+    const w = Number(k.w ?? 1);
+    const h = Number(k.h ?? 1);
+    const r = Number(k.r ?? 0);
+    const rx = Number(k.rx ?? k.x);
+    const ry = Number(k.ry ?? k.y);
+    const corners = [
+      { x: k.x, y: k.y },
+      { x: k.x + w, y: k.y },
+      { x: k.x + w, y: k.y + h },
+      { x: k.x, y: k.y + h },
+    ];
+    if (!r || Math.abs(r) < 0.001) return corners;
+    const rad = (r * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return corners.map((pt) => ({
+      x: rx + (pt.x - rx) * cos - (pt.y - ry) * sin,
+      y: ry + (pt.x - rx) * sin + (pt.y - ry) * cos,
+    }));
+  }
 
-  let maxX = 0;
-  let maxY = 0;
+  let minVisualX = Infinity;
+  let minVisualY = Infinity;
+  let maxVisualX = -Infinity;
+  let maxVisualY = -Infinity;
+
+  for (const k of keys) {
+    const corners = getKeyVisualCorners(k);
+    for (const c of corners) {
+      minVisualX = Math.min(minVisualX, c.x);
+      minVisualY = Math.min(minVisualY, c.y);
+      maxVisualX = Math.max(maxVisualX, c.x);
+      maxVisualY = Math.max(maxVisualY, c.y);
+    }
+  }
+
+  const padX = 0.2;
+  const padY = 0.2;
+  const shiftX = -minVisualX + padX;
+  const shiftY = -minVisualY + padY;
+
   const normKeys = keys.map((k) => {
-    const nx = Math.round((k.x + padX) * 1000) / 1000;
-    const ny = Math.round((k.y + padY) * 1000) / 1000;
-    const nrx = Math.round((k.rx + padX) * 1000) / 1000;
-    const nry = Math.round((k.ry + padY) * 1000) / 1000;
-    maxX = Math.max(maxX, nx + k.w);
-    maxY = Math.max(maxY, ny + k.h);
+    const nx = Math.round((k.x + shiftX) * 1000) / 1000;
+    const ny = Math.round((k.y + shiftY) * 1000) / 1000;
+    const nrx = Math.round(((k.rx ?? k.x) + shiftX) * 1000) / 1000;
+    const nry = Math.round(((k.ry ?? k.y) + shiftY) * 1000) / 1000;
     return { ...k, x: nx, y: ny, rx: nrx, ry: nry };
   });
 
   return {
     ...layout,
     keys: normKeys,
-    widthU: Math.round((maxX + 0.25) * 1000) / 1000,
-    heightU: Math.round((maxY + 0.25) * 1000) / 1000,
+    widthU: Math.max(1, Math.round((maxVisualX - minVisualX + padX * 2) * 1000) / 1000),
+    heightU: Math.max(1, Math.round((maxVisualY - minVisualY + padY * 2) * 1000) / 1000),
   };
 }
 

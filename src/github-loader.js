@@ -9,7 +9,7 @@ import {
   parseMatrixTransformLayouts,
   parsePhysicalLayoutsFromDts,
   pickBestLayout,
-} from "./zmk-parser.js";
+} from "./zmk-parser.js?v=4";
 
 const RELEVANT_EXTS = [
   ".keymap",

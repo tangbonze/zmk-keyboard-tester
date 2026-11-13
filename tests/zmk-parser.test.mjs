@@ -5,6 +5,7 @@ import {
   buildZmkConfigResult,
   deriveLayoutFromKeymapLines,
   extractShieldCandidates,
+  normalizeLayoutBounds,
   parseBuildYaml,
   parseInfoJsonLayouts,
   parseKeymapLayers,
@@ -261,4 +262,25 @@ test("i18n zh and en dictionaries have complete key parity and interpolation", (
   assert.deepEqual(zhKeys, enKeys);
   assert.equal(formatMessage("zh", "metaCoverage", { tested: 5, total: 42, pct: 12 }), "已测试 5 / 42 (12%)");
   assert.equal(formatMessage("en", "metaCoverage", { tested: 5, total: 42, pct: 12 }), "Tested 5 / 42 (12%)");
+});
+
+test("normalizeLayoutBounds accounts for key rotation geometry without inflating canvas bounds", () => {
+  // A layout with rotated thumb keys where raw y is 9.92 but rotated y is ~5.32
+  const layout = {
+    id: "test_rot",
+    name: "Rotated Test",
+    keys: [
+      { index: 0, w: 1, h: 1, x: 0, y: 0.63, r: 0, rx: 0, ry: 0 },
+      { index: 1, w: 1, h: 1, x: 12.5, y: 0.25, r: 0, rx: 0, ry: 0 },
+      { index: 2, w: 1, h: 1, x: 6.55, y: 9.92, r: -30, rx: 0, ry: 0 },
+    ],
+  };
+  const norm = normalizeLayoutBounds(layout);
+  // Without rotation calculation, maxY would be 9.92 + 1 = 10.92, heightU ~11.2
+  // With visual rotation calculation, rotated y of key 2 is ~5.32, so heightU must be under 7u
+  assert.ok(norm.heightU < 7.0, `Expected heightU < 7.0, got ${norm.heightU}`);
+  assert.ok(norm.widthU > 12.0, `Expected widthU > 12.0, got ${norm.widthU}`);
+  assert.equal(norm.keys.length, 3);
+  assert.ok(norm.keys[0].x >= 0.2);
+  assert.ok(norm.keys[0].y >= 0.2);
 });

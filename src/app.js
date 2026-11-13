@@ -249,6 +249,13 @@ function findMatchesInLayer(ev, layerIdx) {
 function handleKeyEvent(ev) {
   if (!appState.config) return;
 
+  // Device isolation: When dedicated hardware connection (Serial or BLE) is active,
+  // ignore standard OS browser keydown events so other keyboards (e.g. laptop, external)
+  // do not interfere with the test canvas!
+  if (serialMonitor.isConnected || studioBleClient.isConnected) {
+    return;
+  }
+
   const codeKey = ev.code || ev.zmk;
 
   if (ev.action === "down") {

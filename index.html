@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZMK KeyTester — 在线 ZMK 键盘测试器</title>
-  <link rel="stylesheet" href="./styles.css?v=6" />
+  <link rel="stylesheet" href="./styles.css?v=7" />
 </head>
 <body>
   <div class="app-shell">
@@ -23,9 +23,13 @@
           <button id="connectHidBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectHidBtn">
             识别 USB / 蓝牙键盘
           </button>
+          <button id="connectBleBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectStudioBleBtn">
+            Studio 蓝牙直连
+          </button>
           <button id="connectSerialBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectSerialBtn">
             串口直读矩阵
           </button>
+          <span id="bleBadge" class="ble-badge hidden" data-i18n="studioBleConnectedBadge">Studio 蓝牙已连接</span>
           <span id="serialBadge" class="serial-badge hidden" data-i18n="serialConnectedBadge">串口矩阵直读中</span>
           <div id="devicesList" class="devices-list"></div>
         </div>
@@ -199,6 +203,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=6"></script>
+  <script type="module" src="./src/app.js?v=7"></script>
 </body>
 </html>

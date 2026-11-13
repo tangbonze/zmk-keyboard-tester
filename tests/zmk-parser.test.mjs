@@ -18,6 +18,7 @@ import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
 import { parseZmkMatrixLog } from "../src/matrix-serial.js";
+import { decodeZmkStudioFrames, encodeZmkStudioFrame } from "../src/zmk-studio-ble.js";
 
 test("parseGitHubUrl handles repo, tree, blob, raw, and shorthand URLs", () => {
   assert.deepEqual(parseGitHubUrl("https://github.com/foo/zmk-config"), {
@@ -340,4 +341,36 @@ test("parseZmkMatrixLog parses ZMK kscan logs correctly", () => {
 
   assert.equal(parseZmkMatrixLog("random noise log line"), null);
   assert.equal(parseZmkMatrixLog(null), null);
+});
+
+test("ZMK Studio RPC framing encodes and decodes packets with byte escaping", () => {
+  // Payload containing regular bytes and special bytes: 0x01, 0xAB (SOF), 0xAC (ESC), 0xAD (EOF), 0x02
+  const rawPayload = new Uint8Array([0x01, 0xab, 0xac, 0xad, 0x02]);
+  const encoded = encodeZmkStudioFrame(rawPayload);
+
+  // Expect: 0xAB, 0x01, [0xAC, 0xAB], [0xAC, 0xAC], [0xAC, 0xAD], 0x02, 0xAD
+  assert.equal(encoded[0], 0xab);
+  assert.equal(encoded[encoded.length - 1], 0xad);
+
+  // Stream decoding with complete packet
+  const { frames, remainder } = decodeZmkStudioFrames(encoded);
+  assert.equal(frames.length, 1);
+  assert.deepEqual(frames[0], rawPayload);
+  assert.equal(remainder.length, 0);
+
+  // Stream decoding with fragmented packet (split across chunks)
+  const chunk1 = encoded.slice(0, 4);
+  const chunk2 = encoded.slice(4);
+
+  const res1 = decodeZmkStudioFrames(chunk1);
+  assert.equal(res1.frames.length, 0);
+  assert.ok(res1.remainder.length > 0);
+
+  const merged = new Uint8Array(res1.remainder.length + chunk2.length);
+  merged.set(res1.remainder, 0);
+  merged.set(chunk2, res1.remainder.length);
+
+  const res2 = decodeZmkStudioFrames(merged);
+  assert.equal(res2.frames.length, 1);
+  assert.deepEqual(res2.frames[0], rawPayload);
 });

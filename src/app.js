@@ -2,12 +2,13 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=6";
-import { formatMessage } from "./i18n.js?v=6";
-import { KeyboardController } from "./keyboard-lock.js?v=6";
-import { SerialMatrixMonitor } from "./matrix-serial.js?v=6";
-import { SoundBeeper } from "./sound.js?v=6";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=6";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=7";
+import { formatMessage } from "./i18n.js?v=7";
+import { KeyboardController } from "./keyboard-lock.js?v=7";
+import { SerialMatrixMonitor } from "./matrix-serial.js?v=7";
+import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=7";
+import { SoundBeeper } from "./sound.js?v=7";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=7";
 
 const soundBeeper = new SoundBeeper();
 
@@ -146,6 +147,8 @@ const els = {
   themeToggleBtn: document.getElementById("themeToggleBtn"),
   langToggleBtn: document.getElementById("langToggleBtn"),
   connectHidBtn: document.getElementById("connectHidBtn"),
+  connectBleBtn: document.getElementById("connectBleBtn"),
+  bleBadge: document.getElementById("bleBadge"),
   connectSerialBtn: document.getElementById("connectSerialBtn"),
   serialBadge: document.getElementById("serialBadge"),
   devicesList: document.getElementById("devicesList"),
@@ -610,6 +613,20 @@ function applyLanguage(lang) {
     els.connectHidBtn.title = "";
   }
 
+  if (typeof studioBleClient !== "undefined" && studioBleClient) {
+    if (!studioBleClient.bleSupported) {
+      els.connectBleBtn.title = t("studioBleUnsupported");
+    } else {
+      els.connectBleBtn.title = "";
+    }
+    if (studioBleClient.isConnected) {
+      els.connectBleBtn.textContent = t("disconnectStudioBleBtn");
+      els.bleBadge.textContent = t("studioBleConnectedBadge");
+    } else {
+      els.connectBleBtn.textContent = t("connectStudioBleBtn");
+    }
+  }
+
   if (typeof serialMonitor !== "undefined" && serialMonitor) {
     if (!serialMonitor.serialSupported) {
       els.connectSerialBtn.title = t("serialUnsupported");
@@ -841,6 +858,25 @@ function handleSerialMatrixEvent(ev) {
   }
 }
 
+function handleStudioBleStatusChange(status) {
+  if (status.isConnected) {
+    els.bleBadge.classList.remove("hidden");
+    els.bleBadge.textContent = t("studioBleConnectedBadge");
+    els.connectBleBtn.textContent = t("disconnectStudioBleBtn");
+    setBanner("studioBleConnectedMsg", "success", { name: status.deviceName });
+  } else {
+    els.bleBadge.classList.add("hidden");
+    els.connectBleBtn.textContent = t("connectStudioBleBtn");
+  }
+}
+
+const studioBleClient = new ZmkStudioBleClient({
+  onStatusChange: handleStudioBleStatusChange,
+  onFrameReceived: (frame) => {
+    console.log("ZMK Studio BLE frame received, bytes:", frame.length);
+  },
+});
+
 const serialMonitor = new SerialMatrixMonitor({
   onMatrixEvent: handleSerialMatrixEvent,
   onStatusChange: handleSerialStatusChange,
@@ -993,6 +1029,18 @@ function init() {
       }
     }
     els.connectHidBtn.blur();
+  });
+
+  // ZMK Studio Web Bluetooth button
+  els.connectBleBtn.addEventListener("click", async () => {
+    try {
+      await studioBleClient.toggle();
+    } catch (err) {
+      if (err.name !== "NotFoundError") {
+        setBanner(err.message, "warn");
+      }
+    }
+    els.connectBleBtn.blur();
   });
 
   // WebSerial direct physical matrix button

@@ -230,6 +230,30 @@ body {
   box-shadow: 0 0 6px #10b981;
 }
 
+.ble-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(14, 165, 233, 0.45);
+  background: rgba(14, 165, 233, 0.16);
+  color: var(--accent-text);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ble-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  box-shadow: 0 0 6px #0ea5e9;
+}
+
 .lock-badge {
   font-size: 12px;
   font-weight: 600;

@@ -1,4 +1,14 @@
-# ZMK KeyTester — 在线 ZMK 键盘物理布局与硬件直读测试器
+<div align="center">
+
+# ZMK KeyTester
+
+**在线 ZMK 键盘物理布局与硬件直读测试器 / Online ZMK Keyboard Physical Layout & Hardware Matrix Tester**
+
+[**简体中文**](./README.md) | [**English**](./README_EN.md)
+
+</div>
+
+---
 
 专为 **ZMK 固件客制化键盘**（分体 / 单体 / 无线蓝牙 / 有线）打造的纯前端在线测试工具，零构建依赖，直接托管于 **GitHub Pages**。
 

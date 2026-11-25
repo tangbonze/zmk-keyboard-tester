@@ -6,7 +6,7 @@ export const MESSAGES = {
   zh: {
     pageTitle: "ZMK KeyTester — 在线 ZMK 键盘物理布局测试器",
     brandSub: "读取 GitHub zmk-config 物理布局 · 实时按键亮起 · 提示音 · 系统键拦截",
-    storeLinkBtn: "🛒 KEYME 商店 ↗",
+    storeLinkBtn: "KEYME 商店 ↗",
     storeLinkTitle: "访问 KEYME AliExpress 官方店铺",
     connectHidBtn: "WebHID 物理矩阵",
     disconnectHidBtn: "断开 WebHID",
@@ -92,7 +92,7 @@ export const MESSAGES = {
   en: {
     pageTitle: "ZMK KeyTester — Online ZMK Physical Layout Tester",
     brandSub: "Load GitHub zmk-config physical layout · Live highlight · Beep · System key lock",
-    storeLinkBtn: "🛒 KEYME Store ↗",
+    storeLinkBtn: "KEYME Store ↗",
     storeLinkTitle: "Visit KEYME Official AliExpress Store",
     connectHidBtn: "WebHID Matrix",
     disconnectHidBtn: "Disconnect WebHID",

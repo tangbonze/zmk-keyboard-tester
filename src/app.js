@@ -2,12 +2,12 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=13";
-import { formatMessage } from "./i18n.js?v=13";
-import { KeyboardController } from "./keyboard-lock.js?v=13";
-import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=13";
-import { SoundBeeper } from "./sound.js?v=13";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=13";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=14";
+import { formatMessage } from "./i18n.js?v=14";
+import { KeyboardController } from "./keyboard-lock.js?v=14";
+import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=14";
+import { SoundBeeper } from "./sound.js?v=14";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=14";
 
 const soundBeeper = new SoundBeeper();
 

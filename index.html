@@ -5,26 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZMK KeyTester — 在线 ZMK 键盘测试器</title>
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="./styles.css?v=13" />
+  <link rel="stylesheet" href="./styles.css?v=14" />
 </head>
 <body>
   <div class="app-shell">
     <!-- Top Header -->
     <header class="topbar">
-      <div class="brand">
-        <a
-          href="https://www.aliexpress.com/store/1105251228"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="brand-logo-link"
-          data-i18n-title="storeLinkTitle"
-          title="访问 KEYME AliExpress 官方店铺"
-        >
-          <img class="brand-logo-img" src="./assets/keyme-logo.png?v=10" alt="KEYME" height="28" />
-        </a>
-        <div>
-          <h1>ZMK KeyTester</h1>
-          <p class="brand-sub" data-i18n="brandSub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
+      <div class="topbar-head">
+        <div class="brand">
+          <a
+            href="https://www.aliexpress.com/store/1105251228"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="brand-logo-link"
+            data-i18n-title="storeLinkTitle"
+            title="访问 KEYME AliExpress 官方店铺"
+          >
+            <img class="brand-logo-img" src="./assets/keyme-logo.png?v=10" alt="KEYME" height="28" />
+          </a>
+          <div>
+            <h1>ZMK KeyTester</h1>
+            <p class="brand-sub" data-i18n="brandSub">读取 GitHub zmk-config 布局 · 实时按键亮起 · 系统键拦截</p>
+          </div>
+        </div>
+
+        <div class="store-corner">
+          <a
+            id="storeLinkBtn"
+            href="https://www.aliexpress.com/store/1105251228"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-store btn-sm"
+            data-i18n-title="storeLinkTitle"
+            title="访问 KEYME AliExpress 官方店铺"
+          >
+            <svg class="store-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="9" cy="21" r="1"></circle>
+              <circle cx="20" cy="21" r="1"></circle>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+            </svg>
+            <span data-i18n="storeLinkBtn">KEYME 商店 ↗</span>
+          </a>
         </div>
       </div>
 
@@ -56,21 +77,6 @@
             中 / EN
           </button>
         </div>
-      </div>
-
-      <div class="store-corner">
-        <a
-          id="storeLinkBtn"
-          href="https://www.aliexpress.com/store/1105251228"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-store btn-sm"
-          data-i18n="storeLinkBtn"
-          data-i18n-title="storeLinkTitle"
-          title="访问 KEYME AliExpress 官方店铺"
-        >
-          🛒 KEYME 商店 ↗
-        </a>
       </div>
     </header>
 
@@ -221,6 +227,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=13"></script>
+  <script type="module" src="./src/app.js?v=14"></script>
 </body>
 </html>

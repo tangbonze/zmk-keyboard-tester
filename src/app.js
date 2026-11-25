@@ -5,7 +5,6 @@
 import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=10";
 import { formatMessage } from "./i18n.js?v=10";
 import { KeyboardController } from "./keyboard-lock.js?v=10";
-import { SerialMatrixMonitor } from "./matrix-serial.js?v=10";
 import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=11";
 import { SoundBeeper } from "./sound.js?v=10";
 import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=10";
@@ -148,8 +147,6 @@ const els = {
   langToggleBtn: document.getElementById("langToggleBtn"),
   connectHidBtn: document.getElementById("connectHidBtn"),
   hidBadge: document.getElementById("hidBadge"),
-  connectSerialBtn: document.getElementById("connectSerialBtn"),
-  serialBadge: document.getElementById("serialBadge"),
   devicesList: document.getElementById("devicesList"),
   metaRepo: document.getElementById("metaRepo"),
   metaLayout: document.getElementById("metaLayout"),
@@ -249,10 +246,10 @@ function findMatchesInLayer(ev, layerIdx) {
 function handleKeyEvent(ev) {
   if (!appState.config) return;
 
-  // Device isolation: When dedicated hardware connection (WebHID or Serial) is active,
+  // Device isolation: When WebHID hardware matrix connection is active,
   // ignore standard OS browser keydown events so other keyboards (e.g. laptop, external)
   // do not interfere with the test canvas!
-  if (hidMatrixClient.isConnected || serialMonitor.isConnected) {
+  if (hidMatrixClient.isConnected) {
     return;
   }
 
@@ -627,20 +624,6 @@ function applyLanguage(lang) {
     }
   }
 
-  if (typeof serialMonitor !== "undefined" && serialMonitor) {
-    if (!serialMonitor.serialSupported) {
-      els.connectSerialBtn.title = t("serialUnsupported");
-    } else {
-      els.connectSerialBtn.title = "";
-    }
-    if (serialMonitor.isConnected) {
-      els.connectSerialBtn.textContent = t("disconnectSerialBtn");
-      els.serialBadge.textContent = t("serialConnectedBadge");
-    } else {
-      els.connectSerialBtn.textContent = t("connectSerialBtn");
-    }
-  }
-
   renderPresets();
   renderDevices(appState.hidDevices);
   renderLockStatus(appState.lockStatus);
@@ -790,74 +773,6 @@ function escapeHtml(str) {
 
 // MARK: - Bootstrap & Event Wiring
 
-function handleSerialStatusChange(status) {
-  if (status.isConnected) {
-    els.serialBadge.classList.remove("hidden");
-    els.serialBadge.textContent = t("serialConnectedBadge");
-    els.connectSerialBtn.textContent = t("disconnectSerialBtn");
-    setBanner("serialConnectedMsg", "success");
-  } else {
-    els.serialBadge.classList.add("hidden");
-    els.connectSerialBtn.textContent = t("connectSerialBtn");
-  }
-}
-
-function handleSerialMatrixEvent(ev) {
-  if (!appState.config?.layout?.keys) return;
-
-  const keys = appState.config.layout.keys;
-  let targetIdx = -1;
-
-  // 1. Direct match by ZMK kscan physical position index if present
-  if (ev.position !== null && ev.position !== undefined && ev.position >= 0 && ev.position < keys.length) {
-    targetIdx = ev.position;
-  } else {
-    // 2. Match by row & col
-    targetIdx = keys.findIndex((k) => k.row === ev.row && k.col === ev.col);
-  }
-
-  const isMatched = targetIdx >= 0;
-  const eventLabel = `[R${ev.row}C${ev.col}]`;
-
-  if (ev.pressed) {
-    if (isMatched) {
-      appState.activeKeyVisuals.set(targetIdx, "primary");
-      appState.testedPhysicalKeys.add(targetIdx);
-      appState.selectedKeyIdx = targetIdx;
-      soundBeeper.beepKey({ matched: true });
-    } else {
-      soundBeeper.beepKey({ matched: false });
-    }
-
-    appState.lastKeyEvent = {
-      action: "down",
-      zmk: eventLabel,
-      code: `Row:${ev.row} Col:${ev.col}`,
-      matched: isMatched,
-      intercepted: true,
-      source: "serial-matrix",
-    };
-
-    pushEventLog(
-      {
-        zmk: `${t("serialLogTag")} ${eventLabel}`,
-        code: `Row:${ev.row} Col:${ev.col}`,
-        intercepted: true,
-      },
-      isMatched ? [{ keyIdx: targetIdx }] : []
-    );
-
-    updateKeyVisualStates();
-    updateCoverageMeta();
-    renderInspector(isMatched ? targetIdx : appState.selectedKeyIdx, appState.lastKeyEvent);
-  } else {
-    if (isMatched) {
-      appState.activeKeyVisuals.delete(targetIdx);
-      updateKeyVisualStates();
-    }
-  }
-}
-
 function handleHidStatusChange(status) {
   if (status.isConnected) {
     els.hidBadge.classList.remove("hidden");
@@ -931,11 +846,6 @@ function handleHidMatrixEvent(ev) {
 const hidMatrixClient = new WebHidMatrixClient({
   onMatrixEvent: handleHidMatrixEvent,
   onStatusChange: handleHidStatusChange,
-});
-
-const serialMonitor = new SerialMatrixMonitor({
-  onMatrixEvent: handleSerialMatrixEvent,
-  onStatusChange: handleSerialStatusChange,
 });
 
 const keyboardCtrl = new KeyboardController({
@@ -1109,18 +1019,6 @@ function init() {
       }
     }
     els.connectHidBtn.blur();
-  });
-
-  // WebSerial direct physical matrix button
-  els.connectSerialBtn.addEventListener("click", async () => {
-    try {
-      await serialMonitor.toggle();
-    } catch (err) {
-      if (err.name !== "NotFoundError") {
-        setBanner(err.message, "warn");
-      }
-    }
-    els.connectSerialBtn.blur();
   });
 
   // Stage options

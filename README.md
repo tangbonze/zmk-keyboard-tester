@@ -53,36 +53,28 @@
 > - **日常功能零干扰**：不修改标准键盘 `HID_0` 描述符与蓝牙功能；在测试期间支持静默拦截，避免测试按键向电脑乱输入字符。
 > - **分体键盘全覆盖**：仅需在主机（Central）自动启用，即可同时识别左右手所有物理按键。
 
-本项目提供了两条硬件级直连通道：
+本项目提供了基于 WebHID 的硬件级物理矩阵直读通道：
 
 ```
                     ┌───────────────────────────┐
                     │       ZMK 键盘主控        │
+                    │  (需安装 zmk-matrix-tester) │
                     └─────────────┬─────────────┘
                                   │
-                ┌─────────────────┴─────────────────┐
-                ▼                                   ▼
-   【WebHID 物理矩阵 (推荐)】               【有线串口 (调试备用)】
-      WebHID API (HID_1)                      Web Serial API
-    需安装 zmk-matrix-tester              CONFIG_ZMK_USB_LOGGING=y
-                │                                   │
-   独立 Vendor HID (0xFF60)                  CDC-ACM 虚拟串口
-   直接上报物理 Position/分体                 Row/Col 调试日志
-                │                                   │
-                ▼                                   ▼
-   无需 USB Logging                         仅限调试开启日志
-   无线零耗电 / 支持静默拦截                 电脑 5V 供电
-                │                                   │
-                └─────────────────┬─────────────────┘
+                     WebHID API (HID_1, 0xFF60)
+                    直接上报物理 Position 与分体来源
+                    无需 USB Logging / 无线零耗电
+                                  │
                                   ▼
                    ┌──────────────────────────────┐
                    │    ZMK KeyTester 网页端      │
                    │  - 物理按键精准点亮          │
+                   │  - 静默拦截防误触            │
                    │  - 蜂鸣提示音 & 覆盖率统计   │
                    └──────────────────────────────┘
 ```
 
-### 1. WebHID 物理矩阵直读（推荐，需 `zmk-matrix-tester` 模块）
+### WebHID 物理矩阵直读（需 `zmk-matrix-tester` 模块）
 
 * **底层技术**：基于 Chromium 原生 **WebHID API**（`navigator.hid`），连接模块创建的独立 Vendor HID 接口（`HID_1`，Usage Page `0xFF60` / Usage `0x61`）。
 * **前置条件**：在你的 `zmk-config/config/west.yml` 中引入 [`tangbonze/zmk-matrix-tester`](https://github.com/tangbonze/zmk-matrix-tester) 并重新编译刷写固件（详见该模块仓库的中文/英文配置文档）。
@@ -93,19 +85,13 @@
   - **无线续航零影响**：未插 USB 或未打开测试网页时，模块不发送任何报告也不运行定时器。
   - **无需串口与驱动**：macOS / Windows / Linux 桌面版 Chrome / Edge 即插即用。
 
-### 2. 有线串口直读矩阵（Web Serial API）
-
-* **底层技术**：基于 Chromium 原生 **Web Serial API**（`navigator.serial`），波特率 115200。
-* **适用场景**：未安装 `zmk-matrix-tester` 模块时，临时通过 `CONFIG_ZMK_USB_LOGGING=y` 读取 `kscan` 调试日志（如 `Row: 0, col: 19, position: 36, pressed: true`）。
-
 ---
 
 ## 固件配置速查
 
-| 想要实现的效果 | 推荐连接方式 | 固件端配置方式 | 耗电/功能影响 |
+| 想要实现的效果 | 连接方式 | 固件端配置方式 | 耗电/功能影响 |
 | :--- | :--- | :--- | :--- |
 | **精准识别物理矩阵（无 USB Logging）** | **WebHID 物理矩阵（推荐）** | `west.yml` 引入 **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)** | **无线零耗电，支持静默测试** |
-| **临时串口调试日志测矩阵** | 有线串口直读矩阵 | `config.conf` 添加 `CONFIG_ZMK_USB_LOGGING=y` | 需开启调试日志，仅建议测试固件使用 |
 | **免改固件快速自测** | 直接按键输入 | 无需任何改动，直接打开网页即可测试 | 通过键值匹配，受层/Combo/空键限制 |
 
 ---

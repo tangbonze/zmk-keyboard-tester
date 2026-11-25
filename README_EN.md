@@ -53,36 +53,28 @@ Standard browser keyboard tests rely on the operating system's global keyboard i
 > - **Zero Interference with Normal Use**: Keeps the standard `HID_0` keyboard/mouse/NKRO descriptors and BLE HIDS untouched; supports silent intercept mode while testing so test keystrokes don't type into your OS.
 > - **Full Split Keyboard Support**: Automatically enabled on the Central side only and receives physical positions from both Central and Peripheral halves.
 
-This project provides two hardware-level channels:
+This project provides a dedicated WebHID hardware channel for physical matrix testing:
 
 ```
                     ┌───────────────────────────┐
                     │    ZMK Keyboard MCU       │
+                    │ (Requires zmk-matrix-tester)
                     └─────────────┬─────────────┘
                                   │
-                ┌─────────────────┴─────────────────┐
-                ▼                                   ▼
- 【WebHID Matrix (Recommended)】          【Wired Serial (Fallback)】
-      WebHID API (HID_1)                       Web Serial API
-  Requires zmk-matrix-tester               CONFIG_ZMK_USB_LOGGING=y
-                │                                   │
-  Vendor HID (0xFF60 / 0x61)                CDC-ACM serial logs
-  Direct physical pos & split               Row/Col debug output
-                │                                   │
-                ▼                                   ▼
-  No USB Logging needed                     Debug logging only
-  0 battery drain / silent test             USB 5V powered
-                │                                   │
-                └─────────────────┬─────────────────┘
+                     WebHID API (HID_1, 0xFF60)
+                   Direct physical position & split
+                   No USB Logging / 0 battery drain
+                                  │
                                   ▼
                    ┌──────────────────────────────┐
                    │    ZMK KeyTester Web Client  │
                    │  - Highlights physical key   │
+                   │  - Silent intercept mode     │
                    │  - Audio beep & coverage %   │
                    └──────────────────────────────┘
 ```
 
-### 1. WebHID Physical Matrix (Recommended — Requires `zmk-matrix-tester` Module)
+### WebHID Physical Matrix (Requires `zmk-matrix-tester` Module)
 
 * **Low-Level Tech**: Uses Chromium's native **WebHID API** (`navigator.hid`) to open the dedicated Vendor HID interface (`HID_1`, Usage Page `0xFF60` / Usage `0x61`).
 * **Prerequisite**: Add [`tangbonze/zmk-matrix-tester`](https://github.com/tangbonze/zmk-matrix-tester) to your `zmk-config/config/west.yml` and flash the updated firmware (see the module repo's bilingual README for setup steps).
@@ -93,19 +85,13 @@ This project provides two hardware-level channels:
   - **Zero wireless battery impact**: When USB is unplugged or the web tester is closed, zero packets, timers, or radio transmissions occur.
   - **Driverless**: Works out of the box on desktop Chrome / Edge (macOS, Windows, Linux).
 
-### 2. Wired Serial Matrix (Web Serial API)
-
-* **Low-Level Tech**: Based on Chromium's native **Web Serial API** (`navigator.serial`) at 115200 baud.
-* **Use Cases**: Legacy fallback when `zmk-matrix-tester` is not installed, by enabling `CONFIG_ZMK_USB_LOGGING=y` to read `kscan` debug logs (`Row: 0, col: 19, position: 36, pressed: true`).
-
 ---
 
 ## Firmware Configuration Cheat Sheet
 
-| Goal | Recommended Mode | Firmware Configuration | Battery / Feature Impact |
+| Goal | Connection Mode | Firmware Configuration | Battery / Feature Impact |
 | :--- | :--- | :--- | :--- |
 | **True Physical Matrix Testing (No USB Logging)** | **WebHID Matrix (Recommended)** | Add **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)** to `west.yml` | **0 wireless battery drain, silent test supported** |
-| **Fallback Debug Serial Log Matrix** | Wired Serial Matrix | Add `CONFIG_ZMK_USB_LOGGING=y` to `config.conf` | Requires debug logging enabled |
 | **Quick Test without Firmware Changes** | Standard Key Input | No changes required | Matches by HID keycode; limited by layers/combos/`&none` |
 
 ---

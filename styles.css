@@ -249,7 +249,6 @@ body {
   background: rgba(16, 185, 129, 0.12);
 }
 
-.serial-badge,
 .hid-badge {
   font-size: 12px;
   font-weight: 600;
@@ -264,7 +263,6 @@ body {
   gap: 4px;
 }
 
-.serial-badge::before,
 .hid-badge::before {
   content: "";
   display: inline-block;

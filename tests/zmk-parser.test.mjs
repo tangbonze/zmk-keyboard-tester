@@ -18,7 +18,13 @@ import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
 import { parseZmkMatrixLog } from "../src/matrix-serial.js";
-import { decodeZmkStudioFrames, encodeZmkStudioFrame } from "../src/zmk-studio-ble.js";
+import {
+  buildMatrixHidCommand,
+  parseMatrixHidReport,
+  TESTER_CMD,
+  TESTER_MODE,
+  TESTER_MSG,
+} from "../src/matrix-hid.js";
 
 test("parseGitHubUrl handles repo, tree, blob, raw, and shorthand URLs", () => {
   assert.deepEqual(parseGitHubUrl("https://github.com/foo/zmk-config"), {
@@ -343,34 +349,52 @@ test("parseZmkMatrixLog parses ZMK kscan logs correctly", () => {
   assert.equal(parseZmkMatrixLog(null), null);
 });
 
-test("ZMK Studio RPC framing encodes and decodes packets with byte escaping", () => {
-  // Payload containing regular bytes and special bytes: 0x01, 0xAB (SOF), 0xAC (ESC), 0xAD (EOF), 0x02
-  const rawPayload = new Uint8Array([0x01, 0xab, 0xac, 0xad, 0x02]);
-  const encoded = encodeZmkStudioFrame(rawPayload);
+test("matrix-hid builds commands and parses position/info/mode reports", () => {
+  const cmd = buildMatrixHidCommand(TESTER_CMD.SET_MODE, [TESTER_MODE.INTERCEPT]);
+  assert.equal(cmd.length, 16);
+  assert.equal(cmd[0], TESTER_CMD.SET_MODE);
+  assert.equal(cmd[1], TESTER_MODE.INTERCEPT);
 
-  // Expect: 0xAB, 0x01, [0xAC, 0xAB], [0xAC, 0xAC], [0xAC, 0xAD], 0x02, 0xAD
-  assert.equal(encoded[0], 0xab);
-  assert.equal(encoded[encoded.length - 1], 0xad);
+  const posBuf = new ArrayBuffer(16);
+  const posView = new DataView(posBuf);
+  posView.setUint8(0, TESTER_MSG.KEY_POSITION);
+  posView.setUint16(1, 42, true);
+  posView.setUint8(3, 1);
+  posView.setUint8(4, 0xff);
+  posView.setUint32(5, 123456, true);
+  assert.deepEqual(parseMatrixHidReport(posView), {
+    type: "position",
+    position: 42,
+    pressed: true,
+    source: 0xff,
+    timestamp: 123456,
+  });
 
-  // Stream decoding with complete packet
-  const { frames, remainder } = decodeZmkStudioFrames(encoded);
-  assert.equal(frames.length, 1);
-  assert.deepEqual(frames[0], rawPayload);
-  assert.equal(remainder.length, 0);
+  const infoBuf = new ArrayBuffer(16);
+  const infoView = new DataView(infoBuf);
+  infoView.setUint8(0, TESTER_MSG.RSP_INFO);
+  infoView.setUint8(1, 1);
+  infoView.setUint16(2, 61, true);
+  infoView.setUint8(4, 1);
+  infoView.setUint8(5, 1);
+  infoView.setUint8(6, TESTER_MODE.INTERCEPT);
+  infoView.setUint8(7, 16);
+  assert.deepEqual(parseMatrixHidReport(infoView), {
+    type: "info",
+    protocolVersion: 1,
+    keymapLen: 61,
+    isSplit: true,
+    isCentral: true,
+    mode: TESTER_MODE.INTERCEPT,
+    reportSize: 16,
+  });
 
-  // Stream decoding with fragmented packet (split across chunks)
-  const chunk1 = encoded.slice(0, 4);
-  const chunk2 = encoded.slice(4);
-
-  const res1 = decodeZmkStudioFrames(chunk1);
-  assert.equal(res1.frames.length, 0);
-  assert.ok(res1.remainder.length > 0);
-
-  const merged = new Uint8Array(res1.remainder.length + chunk2.length);
-  merged.set(res1.remainder, 0);
-  merged.set(chunk2, res1.remainder.length);
-
-  const res2 = decodeZmkStudioFrames(merged);
-  assert.equal(res2.frames.length, 1);
-  assert.deepEqual(res2.frames[0], rawPayload);
+  const modeBuf = new ArrayBuffer(16);
+  const modeView = new DataView(modeBuf);
+  modeView.setUint8(0, TESTER_MSG.RSP_MODE);
+  modeView.setUint8(1, TESTER_MODE.PASSTHROUGH);
+  assert.deepEqual(parseMatrixHidReport(modeView), {
+    type: "mode",
+    mode: TESTER_MODE.PASSTHROUGH,
+  });
 });

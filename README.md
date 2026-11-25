@@ -39,32 +39,41 @@
 
 ---
 
-## 有线与无线连接原理
+## 物理矩阵连接原理
 
-常规网页测试使用的是操作系统的全局键盘输入流，由于操作系统会将所有键盘的按键合并并抹去硬件来源，任意键盘按下 `A` 都会导致屏幕上的 `A` 亮起。
+常规网页测试使用的是操作系统的全局键盘输入流，无法区分不同键盘，也无法识别 `&none`、层切换键（`&mo`/`&lt`）、Combo 或 Hold-Tap 背后真实的物理按键。
 
-本项目提供了**有线**与**无线（BLE）**两条独立的硬件级直连通道，从根本上解决设备隔离与物理矩阵定位问题：
+> **⚠️ 重要说明（物理矩阵识别必需模块）**：
+> 原生 ZMK 固件默认只向上报逻辑键值（Keycode），不支持无 USB Logging 情况下直接上报物理矩阵位置。
+> 若要使用本工具的 **「WebHID 物理矩阵」** 直读功能（直接定位按下哪一个物理轴体，无需开启 `CONFIG_ZMK_USB_LOGGING=y`），**必须在你的键盘固件中添加配套模块**：
+> 👉 **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)**
+>
+> 该模块通过独立的 USB Vendor Raw HID 接口（`HID_1`，`0xFF60 / 0x61`）工作：
+> - **无线/电池续航零影响**：拔掉 USB 线后零代码执行、无定时器轮询、完全不干扰芯片深度休眠（Deep Sleep）。
+> - **日常功能零干扰**：不修改标准键盘 `HID_0` 描述符与蓝牙功能；在测试期间支持静默拦截，避免测试按键向电脑乱输入字符。
+> - **分体键盘全覆盖**：仅需在主机（Central）自动启用，即可同时识别左右手所有物理按键。
+
+本项目提供了两条硬件级直连通道：
 
 ```
                     ┌───────────────────────────┐
                     │       ZMK 键盘主控        │
                     └─────────────┬─────────────┘
                                   │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-   【有线连接模式】                                   【无线连接模式】
-Web Serial API (CDC-ACM)                         Web Bluetooth API (BLE GATT)
-         │                                                 │
- 1. 硬件矩阵直读日志 (kscan)                        ZMK Studio 专属低功耗服务
-    Row: X, Col: Y, pos: N                          UUID: 00000000-0196-6107-c967-...
- 2. ZMK Studio 有线 RPC                                    │
-    snippet: studio-rpc-usb-uart                           ▼
-         │                                      事件驱动，按需通知，0额外耗电
-         ▼                                      SoF(0xAB) - Esc(0xAC) - EoF(0xAD)
- 电脑 5V 供电，完全不耗电池                                 │
- 完全隔离其他键盘，直接定位物理轴体                           │
-         │                                                 │
-         └────────────────────────┬────────────────────────┘
+                ┌─────────────────┴─────────────────┐
+                ▼                                   ▼
+   【WebHID 物理矩阵 (推荐)】               【有线串口 (调试备用)】
+      WebHID API (HID_1)                      Web Serial API
+    需安装 zmk-matrix-tester              CONFIG_ZMK_USB_LOGGING=y
+                │                                   │
+   独立 Vendor HID (0xFF60)                  CDC-ACM 虚拟串口
+   直接上报物理 Position/分体                 Row/Col 调试日志
+                │                                   │
+                ▼                                   ▼
+   无需 USB Logging                         仅限调试开启日志
+   无线零耗电 / 支持静默拦截                 电脑 5V 供电
+                │                                   │
+                └─────────────────┬─────────────────┘
                                   ▼
                    ┌──────────────────────────────┐
                    │    ZMK KeyTester 网页端      │
@@ -73,41 +82,31 @@ Web Serial API (CDC-ACM)                         Web Bluetooth API (BLE GATT)
                    └──────────────────────────────┘
 ```
 
-### 1. 有线串口直读矩阵（Wired Serial Matrix）
+### 1. WebHID 物理矩阵直读（推荐，需 `zmk-matrix-tester` 模块）
+
+* **底层技术**：基于 Chromium 原生 **WebHID API**（`navigator.hid`），连接模块创建的独立 Vendor HID 接口（`HID_1`，Usage Page `0xFF60` / Usage `0x61`）。
+* **前置条件**：在你的 `zmk-config/config/west.yml` 中引入 [`tangbonze/zmk-matrix-tester`](https://github.com/tangbonze/zmk-matrix-tester) 并重新编译刷写固件（详见该模块仓库的中文/英文配置文档）。
+* **工作机制**：
+  - 在 `zmk_position_state_changed` 事件进入 `combo` / `hold-tap` / `keymap` 之前捕获最原始的物理按键编号 `position` 与分体来源 `source`。
+  - 开启右上角 **「拦截按键」** 时，固件自动进入静默拦截模式（按键不会误触电脑快捷键）；取消勾选或关闭网页/拔线即自动恢复正常打字。
+* **功耗与兼容性**：
+  - **无线续航零影响**：未插 USB 或未打开测试网页时，模块不发送任何报告也不运行定时器。
+  - **无需串口与驱动**：macOS / Windows / Linux 桌面版 Chrome / Edge 即插即用。
+
+### 2. 有线串口直读矩阵（Web Serial API）
 
 * **底层技术**：基于 Chromium 原生 **Web Serial API**（`navigator.serial`），波特率 115200。
-* **适用场景**：键盘组装验板、镊子短接焊盘测通断、热插拔底座测试。
-* **工作机制**：
-  - **模式 A（Kscan 矩阵直读）**：在键盘固件配置中加入 `CONFIG_ZMK_USB_LOGGING=y`。主控的硬件扫键线程（`kscan`）在引脚发生电平跳变时，直接向虚拟串口输出底层扫描事件（如 `Row: 0, col: 19, position: 36, pressed: true`）。网页端直接解析硬件引脚与物理索引高亮按键。
-  - **模式 B（ZMK Studio 有线 RPC）**：固件编译时添加 `snippet: studio-rpc-usb-uart` 与 `CONFIG_ZMK_STUDIO=y`，通过专属 RPC 串口进行结构化通信。
-* **功耗与优势**：
-  - **由电脑 USB 提供 5V 电源**，完全不消耗键盘锂电池电量。
-  - **完全绕过操作系统键盘驱动**：其他键盘敲击在此通道上没有任何数据，杜绝误触发。
-
-### 2. BLE 蓝牙直连（BLE Bluetooth Direct）
-
-* **底层技术**：基于 **Web Bluetooth API**（`navigator.bluetooth`），直接连接 ZMK 官方的 Studio GATT 服务。
-  * **Service UUID**：`00000000-0196-6107-c967-c5cfb1c2482a`
-  * **Characteristic UUID**：`00000001-0196-6107-c967-c5cfb1c2482a`
-* **适用场景**：日常无线打字测试、分体蓝牙键盘测试、不插线便携测试。
-* **工作机制**：
-  - 键盘固件开启 `CONFIG_ZMK_STUDIO=y`。
-  - 网页端建立专属 GATT 蓝牙会话，通过三字节转义分帧协议收发数据：
-    * `0xAB`：帧起始（Start of Frame）
-    * `0xAC`：转义字节（Escape Byte）
-    * `0xAD`：帧结束（End of Frame）
-* **功耗与优势**：
-  - **完全兼容 Zephyr RTOS 的低功耗休眠机制**：不同于串口调试日志的死循环轮询，BLE GATT 服务是**纯事件驱动（Interrupt / Notification）**的。无按键时主控芯片正常进入微安级的深度睡眠（System OFF），**零多余耗电，完全不影响蓝牙键盘数月的正常续航**。
+* **适用场景**：未安装 `zmk-matrix-tester` 模块时，临时通过 `CONFIG_ZMK_USB_LOGGING=y` 读取 `kscan` 调试日志（如 `Row: 0, col: 19, position: 36, pressed: true`）。
 
 ---
 
 ## 固件配置速查
 
-| 想要实现的效果 | 推荐连接方式 | 固件端配置方式 | 耗电情况 |
+| 想要实现的效果 | 推荐连接方式 | 固件端配置方式 | 耗电/功能影响 |
 | :--- | :--- | :--- | :--- |
-| **组装/焊接测试**（测板、测轴） | **有线串口直读矩阵** | `config.conf` 添加 `CONFIG_ZMK_USB_LOGGING=y`<br>或 `build.yaml` 添加 `snippet: studio-rpc-usb-uart` | **零电池消耗**（电脑供电） |
-| **无线日常测试**（杜绝其他键盘干扰）| **BLE蓝牙直连** | `config.conf` 添加 `CONFIG_ZMK_STUDIO=y` | **极低功耗**（芯片正常深度休眠） |
-| **免改固件快速自测** | 直接按键输入 | 无需任何改动，直接打开网页即可测试 | 原生键盘续航 |
+| **精准识别物理矩阵（无 USB Logging）** | **WebHID 物理矩阵（推荐）** | `west.yml` 引入 **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)** | **无线零耗电，支持静默测试** |
+| **临时串口调试日志测矩阵** | 有线串口直读矩阵 | `config.conf` 添加 `CONFIG_ZMK_USB_LOGGING=y` | 需开启调试日志，仅建议测试固件使用 |
+| **免改固件快速自测** | 直接按键输入 | 无需任何改动，直接打开网页即可测试 | 通过键值匹配，受层/Combo/空键限制 |
 
 ---
 

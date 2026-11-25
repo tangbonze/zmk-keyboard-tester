@@ -39,32 +39,41 @@ A modern, zero-dependency, pure client-side web testing tool designed specifical
 
 ---
 
-## Wired & Wireless Connection Principles
+## Hardware Connection Principles
 
-Standard browser keyboard tests rely on the operating system's global keyboard input queue, which aggregates all connected keyboards and strips away hardware origin and matrix coordinates.
+Standard browser keyboard tests rely on the operating system's global keyboard input queue, which cannot isolate individual keyboards and cannot identify `&none`, layer keys (`&mo`/`&lt`), combos, or hold-tap keys by their true physical switch position.
 
-This project provides two dedicated hardware-level communication channels: **Wired (Serial)** and **Wireless (BLE)** to achieve hardware isolation and physical matrix positioning:
+> **⚠️ Important Prerequisite for Physical Matrix Testing**:
+> Stock ZMK firmware only sends logical HID keycodes to the host and does not report physical switch positions without USB logging.
+> To use the **WebHID Matrix** mode in this tool (identifying exact physical switches without enabling `CONFIG_ZMK_USB_LOGGING=y`), **you must install the companion ZMK firmware module**:
+> 👉 **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)**
+>
+> It operates via a dedicated USB Vendor Raw HID interface (`HID_1`, `0xFF60 / 0x61`):
+> - **Zero Battery / Wireless Impact**: Executes zero code on battery, uses zero timers/polling, and never prevents MCU deep sleep.
+> - **Zero Interference with Normal Use**: Keeps the standard `HID_0` keyboard/mouse/NKRO descriptors and BLE HIDS untouched; supports silent intercept mode while testing so test keystrokes don't type into your OS.
+> - **Full Split Keyboard Support**: Automatically enabled on the Central side only and receives physical positions from both Central and Peripheral halves.
+
+This project provides two hardware-level channels:
 
 ```
                     ┌───────────────────────────┐
                     │    ZMK Keyboard MCU       │
                     └─────────────┬─────────────┘
                                   │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-   【Wired Mode】                                    【Wireless Mode】
-Web Serial API (CDC-ACM)                         Web Bluetooth API (BLE GATT)
-         │                                                 │
- 1. Hardware Matrix Log (kscan)                    ZMK Studio Ultra-Low-Power Service
-    Row: X, Col: Y, pos: N                          UUID: 00000000-0196-6107-c967-...
- 2. ZMK Studio Wired RPC                                   │
-    snippet: studio-rpc-usb-uart                           ▼
-         │                                      Event-driven notifications, 0 battery drain
-         ▼                                      SoF(0xAB) - Esc(0xAC) - EoF(0xAD)
- Powered by 5V USB, 0 battery consumed                     │
- Complete isolation, targets physical switch               │
-         │                                                 │
-         └────────────────────────┬────────────────────────┘
+                ┌─────────────────┴─────────────────┐
+                ▼                                   ▼
+ 【WebHID Matrix (Recommended)】          【Wired Serial (Fallback)】
+      WebHID API (HID_1)                       Web Serial API
+  Requires zmk-matrix-tester               CONFIG_ZMK_USB_LOGGING=y
+                │                                   │
+  Vendor HID (0xFF60 / 0x61)                CDC-ACM serial logs
+  Direct physical pos & split               Row/Col debug output
+                │                                   │
+                ▼                                   ▼
+  No USB Logging needed                     Debug logging only
+  0 battery drain / silent test             USB 5V powered
+                │                                   │
+                └─────────────────┬─────────────────┘
                                   ▼
                    ┌──────────────────────────────┐
                    │    ZMK KeyTester Web Client  │
@@ -73,41 +82,31 @@ Web Serial API (CDC-ACM)                         Web Bluetooth API (BLE GATT)
                    └──────────────────────────────┘
 ```
 
-### 1. Wired Serial Matrix (Web Serial API)
+### 1. WebHID Physical Matrix (Recommended — Requires `zmk-matrix-tester` Module)
+
+* **Low-Level Tech**: Uses Chromium's native **WebHID API** (`navigator.hid`) to open the dedicated Vendor HID interface (`HID_1`, Usage Page `0xFF60` / Usage `0x61`).
+* **Prerequisite**: Add [`tangbonze/zmk-matrix-tester`](https://github.com/tangbonze/zmk-matrix-tester) to your `zmk-config/config/west.yml` and flash the updated firmware (see the module repo's bilingual README for setup steps).
+* **How It Works**:
+  - Captures raw `zmk_position_state_changed` events (`position` + split `source`) before `combo`, `hold-tap`, or `keymap` processing.
+  - When **"Intercept Keys"** is checked, firmware switches to silent intercept mode so test presses don't type into other apps; unchecking, closing the tab, or unplugging USB automatically restores normal typing.
+* **Power & Compatibility**:
+  - **Zero wireless battery impact**: When USB is unplugged or the web tester is closed, zero packets, timers, or radio transmissions occur.
+  - **Driverless**: Works out of the box on desktop Chrome / Edge (macOS, Windows, Linux).
+
+### 2. Wired Serial Matrix (Web Serial API)
 
 * **Low-Level Tech**: Based on Chromium's native **Web Serial API** (`navigator.serial`) at 115200 baud.
-* **Use Cases**: PCB assembling, testing solder pads with tweezers, switch verification.
-* **Working Modes**:
-  - **Mode A (Kscan Matrix Logging)**: Add `CONFIG_ZMK_USB_LOGGING=y` to keyboard firmware. The hardware scan driver (`kscan`) streams switch events (`Row: 0, col: 19, position: 36, pressed: true`) directly over USB CDC-ACM. The web client decodes row/col/position to light up the physical keycap.
-  - **Mode B (ZMK Studio Wired RPC)**: Build firmware with `snippet: studio-rpc-usb-uart` and `CONFIG_ZMK_STUDIO=y` for structured RPC over USB serial.
-* **Power & Isolation**:
-  - **Powered by 5V USB bus**: Consumes zero lithium battery power while testing.
-  - **Bypasses OS keyboard pipeline**: Typing on other keyboards generates zero data on this port.
-
-### 2. BLE Bluetooth Direct (Web Bluetooth API)
-
-* **Low-Level Tech**: Based on **Web Bluetooth API** (`navigator.bluetooth`), directly connecting to ZMK's official Studio GATT Service.
-  * **Service UUID**: `00000000-0196-6107-c967-c5cfb1c2482a`
-  * **Characteristic UUID**: `00000001-0196-6107-c967-c5cfb1c2482a`
-* **Use Cases**: Daily wireless switch testing, split Bluetooth keyboards, portable cable-free validation.
-* **Working Mechanism**:
-  - Enable `CONFIG_ZMK_STUDIO=y` in keyboard firmware.
-  - Web client initiates a dedicated GATT connection using ZMK Studio 3-byte escape packet framing:
-    * `0xAB`: Start of Frame (SoF)
-    * `0xAC`: Escape Byte (Esc)
-    * `0xAD`: End of Frame (EoF)
-* **Power & Isolation**:
-  - **Full Zephyr RTOS Low-Power Sleep Compatibility**: Unlike serial logging which continuously polls CPU cycles, BLE GATT is purely **event-driven (interrupt notifications)**. When keys are idle, the MCU enters microamp deep sleep (System OFF), ensuring **zero battery penalty and preserving standard months-long battery life**.
+* **Use Cases**: Legacy fallback when `zmk-matrix-tester` is not installed, by enabling `CONFIG_ZMK_USB_LOGGING=y` to read `kscan` debug logs (`Row: 0, col: 19, position: 36, pressed: true`).
 
 ---
 
 ## Firmware Configuration Cheat Sheet
 
-| Goal | Recommended Mode | Firmware Configuration | Battery Impact |
+| Goal | Recommended Mode | Firmware Configuration | Battery / Feature Impact |
 | :--- | :--- | :--- | :--- |
-| **Assembly / Soldering Test** (pads, switches) | **Wired Serial Matrix** | `config.conf`: `CONFIG_ZMK_USB_LOGGING=y`<br>or `build.yaml`: `snippet: studio-rpc-usb-uart` | **Zero battery drain** (USB powered) |
-| **Wireless Daily Test** (isolated from other keyboards) | **BLE Bluetooth** | `config.conf`: `CONFIG_ZMK_STUDIO=y` | **Ultra-low power** (MCU deep sleep) |
-| **Quick Self-Test without Firmware Changes** | Standard Key Input | No changes required, test directly in browser | Native keyboard battery life |
+| **True Physical Matrix Testing (No USB Logging)** | **WebHID Matrix (Recommended)** | Add **[tangbonze/zmk-matrix-tester](https://github.com/tangbonze/zmk-matrix-tester)** to `west.yml` | **0 wireless battery drain, silent test supported** |
+| **Fallback Debug Serial Log Matrix** | Wired Serial Matrix | Add `CONFIG_ZMK_USB_LOGGING=y` to `config.conf` | Requires debug logging enabled |
+| **Quick Test without Firmware Changes** | Standard Key Input | No changes required | Matches by HID keycode; limited by layers/combos/`&none` |
 
 ---
 

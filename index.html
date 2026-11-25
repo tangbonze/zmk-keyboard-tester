@@ -30,14 +30,14 @@
 
       <div class="topbar-controls">
         <div class="devices-wrap">
+          <button id="connectHidBtn" type="button" class="btn btn-primary btn-sm" data-i18n="connectHidBtn">
+            WebHID 物理矩阵
+          </button>
           <button id="connectSerialBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectSerialBtn">
             有线串口直读矩阵
           </button>
-          <button id="connectBleBtn" type="button" class="btn btn-secondary btn-sm" data-i18n="connectStudioBleBtn">
-            BLE蓝牙直连
-          </button>
+          <span id="hidBadge" class="hid-badge hidden" data-i18n="hidConnectedBadge">WebHID 矩阵已连接</span>
           <span id="serialBadge" class="serial-badge hidden" data-i18n="serialConnectedBadge">有线串口已连接</span>
-          <span id="bleBadge" class="ble-badge hidden" data-i18n="studioBleConnectedBadge">BLE蓝牙已连接</span>
           <div id="devicesList" class="devices-list"></div>
         </div>
 

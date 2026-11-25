@@ -6,7 +6,7 @@ import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./gi
 import { formatMessage } from "./i18n.js?v=10";
 import { KeyboardController } from "./keyboard-lock.js?v=10";
 import { SerialMatrixMonitor } from "./matrix-serial.js?v=10";
-import { ZmkStudioBleClient } from "./zmk-studio-ble.js?v=10";
+import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=11";
 import { SoundBeeper } from "./sound.js?v=10";
 import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=10";
 
@@ -146,8 +146,8 @@ const els = {
   lockBadge: document.getElementById("lockBadge"),
   themeToggleBtn: document.getElementById("themeToggleBtn"),
   langToggleBtn: document.getElementById("langToggleBtn"),
-  connectBleBtn: document.getElementById("connectBleBtn"),
-  bleBadge: document.getElementById("bleBadge"),
+  connectHidBtn: document.getElementById("connectHidBtn"),
+  hidBadge: document.getElementById("hidBadge"),
   connectSerialBtn: document.getElementById("connectSerialBtn"),
   serialBadge: document.getElementById("serialBadge"),
   devicesList: document.getElementById("devicesList"),
@@ -249,10 +249,10 @@ function findMatchesInLayer(ev, layerIdx) {
 function handleKeyEvent(ev) {
   if (!appState.config) return;
 
-  // Device isolation: When dedicated hardware connection (Serial or BLE) is active,
+  // Device isolation: When dedicated hardware connection (WebHID or Serial) is active,
   // ignore standard OS browser keydown events so other keyboards (e.g. laptop, external)
   // do not interfere with the test canvas!
-  if (serialMonitor.isConnected || studioBleClient.isConnected) {
+  if (hidMatrixClient.isConnected || serialMonitor.isConnected) {
     return;
   }
 
@@ -613,17 +613,17 @@ function applyLanguage(lang) {
   els.themeToggleBtn.title = t("themeTitle");
   els.loadBtn.textContent = appState.isLoading ? t("loadingBtn") : t("loadBtn");
 
-  if (typeof studioBleClient !== "undefined" && studioBleClient) {
-    if (!studioBleClient.bleSupported) {
-      els.connectBleBtn.title = t("studioBleUnsupported");
+  if (typeof hidMatrixClient !== "undefined" && hidMatrixClient) {
+    if (!hidMatrixClient.hidSupported) {
+      els.connectHidBtn.title = t("hidUnsupported");
     } else {
-      els.connectBleBtn.title = "";
+      els.connectHidBtn.title = "";
     }
-    if (studioBleClient.isConnected) {
-      els.connectBleBtn.textContent = t("disconnectStudioBleBtn");
-      els.bleBadge.textContent = t("studioBleConnectedBadge");
+    if (hidMatrixClient.isConnected) {
+      els.connectHidBtn.textContent = t("disconnectHidBtn");
+      els.hidBadge.textContent = t("hidConnectedBadge");
     } else {
-      els.connectBleBtn.textContent = t("connectStudioBleBtn");
+      els.connectHidBtn.textContent = t("connectHidBtn");
     }
   }
 
@@ -858,23 +858,79 @@ function handleSerialMatrixEvent(ev) {
   }
 }
 
-function handleStudioBleStatusChange(status) {
+function handleHidStatusChange(status) {
   if (status.isConnected) {
-    els.bleBadge.classList.remove("hidden");
-    els.bleBadge.textContent = t("studioBleConnectedBadge");
-    els.connectBleBtn.textContent = t("disconnectStudioBleBtn");
-    setBanner("studioBleConnectedMsg", "success", { name: status.deviceName });
+    els.hidBadge.classList.remove("hidden");
+    els.hidBadge.textContent = t("hidConnectedBadge");
+    els.connectHidBtn.textContent = t("disconnectHidBtn");
+    setBanner("hidConnectedMsg", "success", { name: status.deviceName });
   } else {
-    els.bleBadge.classList.add("hidden");
-    els.connectBleBtn.textContent = t("connectStudioBleBtn");
+    els.hidBadge.classList.add("hidden");
+    els.connectHidBtn.textContent = t("connectHidBtn");
   }
 }
 
-const studioBleClient = new ZmkStudioBleClient({
-  onStatusChange: handleStudioBleStatusChange,
-  onFrameReceived: (frame) => {
-    console.log("ZMK Studio BLE frame received, bytes:", frame.length);
-  },
+function handleHidMatrixEvent(ev) {
+  if (!appState.config?.layout?.keys) return;
+
+  const keys = appState.config.layout.keys;
+  const targetIdx = ev.position >= 0 && ev.position < keys.length ? ev.position : -1;
+  const isMatched = targetIdx >= 0;
+  const keyMeta = isMatched ? keys[targetIdx] : null;
+  const hasRc = keyMeta && keyMeta.row !== undefined && keyMeta.col !== undefined;
+  const sideLabel = ev.source === 0xff ? "Central" : `Peripheral #${ev.source}`;
+  const eventLabel = hasRc ? `[Pos #${ev.position} · R${keyMeta.row}C${keyMeta.col}]` : `[Pos #${ev.position}]`;
+  const codeText = hasRc ? `Row:${keyMeta.row} Col:${keyMeta.col} (${sideLabel})` : `Pos:${ev.position} (${sideLabel})`;
+
+  if (ev.pressed) {
+    const prevTestedCount = appState.testedPhysicalKeys.size;
+    if (isMatched) {
+      appState.activeKeyVisuals.set(targetIdx, "primary");
+      appState.testedPhysicalKeys.add(targetIdx);
+      appState.selectedKeyIdx = targetIdx;
+      const justFinishedAll =
+        appState.config.keyCount > 0 &&
+        prevTestedCount < appState.config.keyCount &&
+        appState.testedPhysicalKeys.size === appState.config.keyCount;
+      if (justFinishedAll) {
+        soundBeeper.beepCompleted();
+      } else {
+        soundBeeper.beepKey({ matched: true });
+      }
+    } else {
+      soundBeeper.beepKey({ matched: false });
+    }
+
+    appState.lastKeyEvent = {
+      action: "down",
+      zmk: eventLabel,
+      code: codeText,
+      matched: isMatched,
+      intercepted: true,
+      source: "webhid-matrix",
+    };
+
+    pushEventLog(
+      {
+        zmk: `${t("hidLogTag")} ${eventLabel}`,
+        code: codeText,
+        intercepted: true,
+      },
+      isMatched ? [{ keyIdx: targetIdx }] : []
+    );
+
+    updateKeyVisualStates();
+    updateCoverageMeta();
+    renderInspector(isMatched ? targetIdx : appState.selectedKeyIdx, appState.lastKeyEvent);
+  } else if (isMatched) {
+    appState.activeKeyVisuals.delete(targetIdx);
+    updateKeyVisualStates();
+  }
+}
+
+const hidMatrixClient = new WebHidMatrixClient({
+  onMatrixEvent: handleHidMatrixEvent,
+  onStatusChange: handleHidStatusChange,
 });
 
 const serialMonitor = new SerialMatrixMonitor({
@@ -1017,8 +1073,20 @@ function init() {
 
   // Interception controls
   els.interceptToggle.addEventListener("change", () => {
-    keyboardCtrl.setInterceptEnabled(els.interceptToggle.checked);
+    const enabled = els.interceptToggle.checked;
+    keyboardCtrl.setInterceptEnabled(enabled);
+    if (hidMatrixClient.isConnected) {
+      hidMatrixClient
+        .setMode(enabled ? TESTER_MODE.INTERCEPT : TESTER_MODE.PASSTHROUGH)
+        .catch(() => {});
+    }
     els.interceptToggle.blur();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (hidMatrixClient.isConnected) {
+      hidMatrixClient.disconnect().catch(() => {});
+    }
   });
 
   els.fullscreenLockBtn.addEventListener("click", () => {
@@ -1030,16 +1098,17 @@ function init() {
     els.fullscreenLockBtn.blur();
   });
 
-  // ZMK Studio Web Bluetooth button
-  els.connectBleBtn.addEventListener("click", async () => {
+  // WebHID direct physical matrix button
+  els.connectHidBtn.addEventListener("click", async () => {
     try {
-      await studioBleClient.toggle();
+      const mode = els.interceptToggle.checked ? TESTER_MODE.INTERCEPT : TESTER_MODE.PASSTHROUGH;
+      await hidMatrixClient.toggle(mode);
     } catch (err) {
       if (err.name !== "NotFoundError") {
         setBanner(err.message, "warn");
       }
     }
-    els.connectBleBtn.blur();
+    els.connectHidBtn.blur();
   });
 
   // WebSerial direct physical matrix button

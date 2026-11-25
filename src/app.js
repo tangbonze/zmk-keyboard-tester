@@ -2,12 +2,12 @@
  * ZMK Keyboard Tester - Main Application Controller & Interactive Renderer.
  */
 
-import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=10";
-import { formatMessage } from "./i18n.js?v=10";
-import { KeyboardController } from "./keyboard-lock.js?v=10";
-import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=11";
-import { SoundBeeper } from "./sound.js?v=10";
-import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=10";
+import { loadZmkFromFileList, loadZmkFromGitHub, loadZmkFromRawText } from "./github-loader.js?v=13";
+import { formatMessage } from "./i18n.js?v=13";
+import { KeyboardController } from "./keyboard-lock.js?v=13";
+import { TESTER_MODE, WebHidMatrixClient } from "./matrix-hid.js?v=13";
+import { SoundBeeper } from "./sound.js?v=13";
+import { displayForKey, extractModifiedKeycode } from "./zmk-keycodes.js?v=13";
 
 const soundBeeper = new SoundBeeper();
 
@@ -17,6 +17,10 @@ const SAMPLE_CORNE_KEYMAP = `
 #include <dt-bindings/zmk/bt.h>
 
 / {
+    chosen {
+        zmk,physical-layout = &foostan_corne_6col_layout;
+    };
+
     behaviors {
         hm: homerow_mods {
             compatible = "zmk,behavior-hold-tap";
@@ -59,6 +63,59 @@ const SAMPLE_CORNE_KEYMAP = `
                                  &kp LGUI   &trans     &kp SPACE    &kp RET    &trans    &kp RALT
             >;
         };
+    };
+};
+`;
+
+const SAMPLE_CORNE_LAYOUT_DTSI = `
+/ {
+    foostan_corne_6col_layout: foostan_corne_6col_layout {
+        compatible = "zmk,physical-layout";
+        display-name = "6 Column";
+        keys
+            = <&key_physical_attrs 100 100    0   37       0     0     0>
+            , <&key_physical_attrs 100 100  100   37       0     0     0>
+            , <&key_physical_attrs 100 100  200   12       0     0     0>
+            , <&key_physical_attrs 100 100  300    0       0     0     0>
+            , <&key_physical_attrs 100 100  400   12       0     0     0>
+            , <&key_physical_attrs 100 100  500   24       0     0     0>
+            , <&key_physical_attrs 100 100  800   24       0     0     0>
+            , <&key_physical_attrs 100 100  900   12       0     0     0>
+            , <&key_physical_attrs 100 100 1000    0       0     0     0>
+            , <&key_physical_attrs 100 100 1100   12       0     0     0>
+            , <&key_physical_attrs 100 100 1200   37       0     0     0>
+            , <&key_physical_attrs 100 100 1300   37       0     0     0>
+            , <&key_physical_attrs 100 100    0  137       0     0     0>
+            , <&key_physical_attrs 100 100  100  137       0     0     0>
+            , <&key_physical_attrs 100 100  200  112       0     0     0>
+            , <&key_physical_attrs 100 100  300  100       0     0     0>
+            , <&key_physical_attrs 100 100  400  112       0     0     0>
+            , <&key_physical_attrs 100 100  500  124       0     0     0>
+            , <&key_physical_attrs 100 100  800  124       0     0     0>
+            , <&key_physical_attrs 100 100  900  112       0     0     0>
+            , <&key_physical_attrs 100 100 1000  100       0     0     0>
+            , <&key_physical_attrs 100 100 1100  112       0     0     0>
+            , <&key_physical_attrs 100 100 1200  137       0     0     0>
+            , <&key_physical_attrs 100 100 1300  137       0     0     0>
+            , <&key_physical_attrs 100 100    0  237       0     0     0>
+            , <&key_physical_attrs 100 100  100  237       0     0     0>
+            , <&key_physical_attrs 100 100  200  212       0     0     0>
+            , <&key_physical_attrs 100 100  300  200       0     0     0>
+            , <&key_physical_attrs 100 100  400  212       0     0     0>
+            , <&key_physical_attrs 100 100  500  224       0     0     0>
+            , <&key_physical_attrs 100 100  800  224       0     0     0>
+            , <&key_physical_attrs 100 100  900  212       0     0     0>
+            , <&key_physical_attrs 100 100 1000  200       0     0     0>
+            , <&key_physical_attrs 100 100 1100  212       0     0     0>
+            , <&key_physical_attrs 100 100 1200  237       0     0     0>
+            , <&key_physical_attrs 100 100 1300  237       0     0     0>
+            , <&key_physical_attrs 100 100  350  312       0     0     0>
+            , <&key_physical_attrs 100 100  450  312    1200   450   412>
+            , <&key_physical_attrs 100 150  548  283    2400   548   433>
+            , <&key_physical_attrs 100 150  752  283  (-2400)  852   433>
+            , <&key_physical_attrs 100 100  850  312  (-1200)  950   412>
+            , <&key_physical_attrs 100 100  950  312       0     0     0>
+            ;
     };
 };
 `;
@@ -854,6 +911,14 @@ const keyboardCtrl = new KeyboardController({
   onDevicesChange: renderDevices,
 });
 
+async function loadBuiltInDemo() {
+  const cfg = await loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap", {
+    "config/corne-layouts.dtsi": SAMPLE_CORNE_LAYOUT_DTSI,
+  });
+  cfg.isDemo = true;
+  applyLoadedConfig(cfg);
+}
+
 function init() {
   // Restore theme & language preferences
   let initTheme = "dark";
@@ -975,9 +1040,11 @@ function init() {
 
   // Demo config button
   els.loadDemoBtn.addEventListener("click", async () => {
-    const cfg = await loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap");
-    cfg.isDemo = true;
-    applyLoadedConfig(cfg);
+    try {
+      await loadBuiltInDemo();
+    } catch (err) {
+      setBanner("bannerParseError", "error", { msg: err.message });
+    }
     els.loadDemoBtn.blur();
   });
 
@@ -1119,9 +1186,8 @@ function init() {
     if (savedUrl) {
       els.repoUrlInput.value = savedUrl;
     }
-    loadZmkFromRawText(SAMPLE_CORNE_KEYMAP, "corne.keymap").then((cfg) => {
-      cfg.isDemo = true;
-      applyLoadedConfig(cfg);
+    loadBuiltInDemo().catch((err) => {
+      setBanner("bannerParseError", "error", { msg: err.message });
     });
   }
 }

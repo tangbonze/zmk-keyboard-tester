@@ -13,7 +13,7 @@ import {
   parsePhysicalLayoutsFromDts,
   parseWestYml,
 } from "../src/zmk-parser.js";
-import { disambiguateBranchAndPath, parseGitHubUrl } from "../src/github-loader.js";
+import { disambiguateBranchAndPath, loadZmkFromRawText, parseGitHubUrl } from "../src/github-loader.js";
 import { formatMessage, MESSAGES } from "../src/i18n.js";
 import { SoundBeeper } from "../src/sound.js";
 import { extractModifiedKeycode, keyboardEventToZmk } from "../src/zmk-keycodes.js";
@@ -359,4 +359,31 @@ test("matrix-hid builds commands and parses position/info/mode reports", () => {
     type: "mode",
     mode: TESTER_MODE.PASSTHROUGH,
   });
+});
+
+test("loadZmkFromRawText gracefully falls back offline without crashing", async () => {
+  const keymap = `
+    / {
+      keymap {
+        compatible = "zmk,keymap";
+        default_layer {
+          bindings = <
+            &kp Q &kp W
+            &kp A &kp S
+          >;
+        };
+      };
+    };
+  `;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("offline");
+  };
+  try {
+    const res = await loadZmkFromRawText(keymap, "corne.keymap");
+    assert.equal(res.keyCount, 4);
+    assert.equal(res.layout.keys.length, 4);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
 });

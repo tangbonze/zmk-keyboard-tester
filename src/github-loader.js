@@ -9,7 +9,7 @@ import {
   parseMatrixTransformLayouts,
   parsePhysicalLayoutsFromDts,
   pickBestLayout,
-} from "./zmk-parser.js?v=10";
+} from "./zmk-parser.js?v=13";
 
 const RELEVANT_EXTS = [
   ".keymap",
@@ -145,9 +145,13 @@ async function fetchJson(url, token = null) {
 }
 
 async function fetchRawText(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) return null;
-  return resp.text();
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    return await resp.text();
+  } catch {
+    return null;
+  }
 }
 
 async function getGitHubTree(owner, repo, branch = null, token = null) {
@@ -495,8 +499,8 @@ export async function loadZmkFromFileList(fileList, { preferredKeymap = null } =
 /**
  * Parse raw pasted .keymap text directly.
  */
-export async function loadZmkFromRawText(keymapText, name = "custom.keymap") {
-  const files = { [`config/${name}`]: keymapText };
+export async function loadZmkFromRawText(keymapText, name = "custom.keymap", extraFiles = {}) {
+  const files = { [`config/${name}`]: keymapText, ...extraFiles };
   return buildZmkConfigResult({
     files,
     repoLabel: "自定义 Keymap",
